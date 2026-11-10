@@ -6,11 +6,15 @@ This repo is **only the visual plus a Markdown importer**. It has no note-taking
 
 ## Try the demo
 
-Open `docs/index.html` in Chrome, Edge, Safari or Firefox. It shows 14 made-up notes. Drag to rotate, scroll to zoom, click a star to read it.
+**Live demo: https://williamwasen.github.io/second-brain-black-hole/**
+
+It shows 14 made-up notes. Drag to rotate, scroll to zoom, click a star to read it. To run it offline, open `docs/index.html` in Chrome, Edge, Safari or Firefox.
 
 ## Use your own notes
 
-You need [Node.js](https://nodejs.org) 18 or newer (the LTS download is fine).
+**Easiest way:** paste this repo's link into Claude (Claude Code or the desktop app, which can run commands on your computer) and say: "Install this and build it from my notes folder." Claude will follow the steps below for you.
+
+**Or do it yourself.** You need [Node.js](https://nodejs.org) 18 or newer (the LTS download is fine).
 
 ```
 git clone https://github.com/williamwasen/second-brain-black-hole.git
