@@ -1,0 +1,1857 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:;">
+<title>Second Brain · 3D map</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #050505;
+  --panel: #101010ed;
+  --line: #ffffff16;
+  --text: #e8e8e8;
+  --muted: #929292;
+  --accent: #c8eee1;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+main { position: fixed; inset: 0; }
+header { position: absolute; inset: 26px 30px auto; z-index: 2; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+h1 { margin: 0; font-size: 11px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; color: #c0c0c0; }
+header button { pointer-events: auto; }
+#overview { width: auto; height: 34px; padding: 0 11px; border-radius: 20px; font-size: 12px; }
+#hubs { position: absolute; inset: 0; pointer-events: none; }
+.hub { position: absolute; width: 44px; height: 44px; transform: translate(-50%, -50%); pointer-events: auto; overflow: visible; color: #fff; }
+.hub:hover { color: #fff; background: transparent; }
+.hub-dot { position: relative; width: 26px; height: 26px; background: radial-gradient(circle, #fff 0%, #fffffff0 4%, #ffffffa0 10%, #ffffff48 22%, #ffffff14 43%, transparent 70%); filter: brightness(1.8) drop-shadow(0 0 6px #ffffffb0); flex-shrink: 0; transition: scale .16s; }
+.hub-dot::before, .hub-dot::after { content: ''; position: absolute; top: 50%; left: 50%; width: 36px; height: 1px; border-radius: 100%; background: linear-gradient(90deg, transparent, #ffffff75 25%, #fff 45% 55%, #ffffff75 75%, transparent); transform: translate(-50%, -50%); }
+.hub-dot::after { width: 32px; transform: translate(-50%, -50%) rotate(90deg); }
+.hub:hover .hub-dot, .hub:focus-visible .hub-dot { scale: 1.18; }
+.lensed .hub { width: var(--hub-hit, 44px); height: var(--hub-hit, 44px); }
+.lensed .hub-dot { width: var(--shadow-size, 24px); height: var(--shadow-size, 24px); background: transparent; box-shadow: none; border: 1px solid transparent; }
+.lensed .hub-dot::before, .lensed .hub-dot::after { display: none; }
+.lensed .hub:hover .hub-dot, .lensed .hub:focus-visible .hub-dot { border-color: #ffffff65; scale: 1.04; }
+.lensed .hub-name { top: var(--hub-label-y, 44px); }
+.hub-name { position: absolute; top: 41px; left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 2px 7px; border-radius: 12px; color: #f1f1f1; background: #080808d9; font-size: 11px; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .hub-dot { transition: none; } }
+h2 { margin: 9px 0 12px; font-size: 22px; font-weight: 500; line-height: 1.25; letter-spacing: -.035em; overflow-wrap: anywhere; }
+p { margin: 0; }
+.eyebrow { color: var(--muted); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+.stage { position: absolute; inset: 0; z-index: 0; }
+/* Cursor: thin white crosshair everywhere (1 css px lines, small gap, center dot; 1x and 2x images, crosshair fallback) */
+:root { --sb-cursor: -webkit-image-set(url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAT0lEQVR42mNgGAWUgTwkPDAO+A8Eow4YdcCoA0YdMKAOGOiScPhWLIQwviggxxxEgiIE0C3DJUaiOYMjBEbBaIto1AGjDhh1wKgDRmaLCAAfZ8AdGpI3cgAAAABJRU5ErkJggg==) 1x, url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAhklEQVR42u3ZQQqAIBBA0Tmx99/VxqUhKSoy74O7FvYgqSlCks5UPhaAVABPDQAAAAAAAAAAAAAAAAAAAAAAAEAWgDATzAsg6a7DaXaNHoK79gOg+YIyW+/G/l63cD8APAIAJMnnMAAjMQAAAAAAAAAAAAAAAAAAAAAAAAALAcJM0B8bnewFSL0Anmz1A+UAAAAASUVORK5CYII=) 2x) 16 16, crosshair; }
+*, *::before, *::after { cursor: var(--sb-cursor); }
+input, textarea, [contenteditable] { cursor: text; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#sky-source, #sky, #signals, #phenomena { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#sky-source { object-fit: cover; opacity: .5; }
+#graph { position: relative; }
+.toolbar { position: absolute; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); z-index: 2; display: flex; align-items: center; gap: 3px; padding: 5px; background: #131313d9; border: 1px solid var(--line); border-radius: 30px; backdrop-filter: blur(16px); }
+button, select, a { font: inherit; }
+button { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; background: transparent; color: #ababab; border: 0; border-radius: 50%; }
+button:hover { background: #ffffff0d; color: #fff; }
+:focus-visible { outline: 1px solid #d4e7df; outline-offset: 4px; }
+#browse { width: auto; height: 34px; padding: 0 14px; border: 1px solid var(--line); border-radius: 20px; background: #111111b0; font-size: 12px; }
+aside { position: absolute; z-index: 3; top: 78px; right: 30px; width: min(310px, calc(100% - 40px)); max-height: calc(100% - 170px); overflow: auto; padding: 21px; background: var(--panel); border: 1px solid var(--line); border-radius: 15px; backdrop-filter: blur(22px); box-shadow: 0 20px 70px #0008; }
+.panel-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 12px; }
+label { color: var(--muted); font-size: 12px; }
+#close-panel { width: 28px; height: 28px; }
+select { width: 100%; padding: 9px; border-radius: 7px; border: 1px solid #ffffff20; background: #181818; color: var(--text); font-size: 13px; }
+#detail { padding-top: 21px; }
+#path { display: none; }
+a { color: var(--accent); font-size: 13px; text-underline-offset: 4px; }
+h3 { margin: 23px 0 7px; font-size: 11px; font-weight: 400; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+#neighbors { list-style: none; margin: 0; padding: 0; }
+#neighbors button { display: block; width: 100%; height: auto; min-height: 34px; text-align: left; padding: 8px 0; border-radius: 0; border-bottom: 1px solid #ffffff0a; font-size: 13px; color: #d0d0d0; }
+#neighbors button:hover { background: transparent; color: var(--accent); }
+aside.reading { width: min(460px, calc(100% - 40px)); }
+/* The stage is wider than the window on the left, so it can slide left while a
+   page is open and keep the selected page clear of the reading panel. */
+:root { --reading-shift: 245px; }
+.stage { left: calc(-2 * var(--reading-shift)); transform: translateX(var(--reading-shift)); transition: transform 1.1s cubic-bezier(.45, 0, .2, 1); }
+body.reading .stage { transform: none; }
+@media (max-width: 900px) { :root { --reading-shift: 0px; } }
+@media (prefers-reduced-motion: reduce) { .stage { transition: none; } }
+#search { width: 100%; margin-bottom: 8px; padding: 9px 11px; border-radius: 7px; border: 1px solid #ffffff20; background: #181818; color: var(--text); font: inherit; font-size: 13px; }
+#search::placeholder { color: #7a7a7a; }
+#results { list-style: none; margin: 0 0 8px; padding: 0; max-height: 260px; overflow: auto; }
+#results button { display: block; width: 100%; height: auto; padding: 7px 8px; text-align: left; border-radius: 7px; color: #d6d6d6; font-size: 13px; }
+#results button:hover, #results button.current { background: #ffffff10; color: #fff; }
+#results small { display: block; color: var(--muted); font-size: 11px; }
+#results .empty { padding: 7px 8px; color: var(--muted); font-size: 12px; }
+.hub-name[data-new]::after { content: attr(data-new); color: #e7b85a; }
+.new-tag { margin-left: 6px; padding: 0 6px; border-radius: 8px; background: #c8a96a; color: #120e09; font-size: 10px; font-weight: 600; }
+#meta { color: var(--muted); font-size: 12px; margin: -4px 0 12px; }
+.doc { margin-top: 18px; padding-top: 4px; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.6; color: #d6d6d6; overflow-wrap: anywhere; }
+.doc h2, .doc h3, .doc h4, .doc h5, .doc h6 { margin: 20px 0 6px; font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: #f0f0f0; }
+.doc p, .doc ul, .doc ol, .doc blockquote, .doc pre, .doc .table { margin: 0 0 10px; }
+.doc ul, .doc ol { padding-left: 18px; }
+.doc li { margin-bottom: 4px; }
+.doc blockquote { padding-left: 11px; border-left: 2px solid #c8a96a; color: #e6dcc6; }
+.doc code { font: 12px ui-monospace, monospace; padding: 1px 4px; border-radius: 4px; background: #ffffff12; }
+.doc pre { padding: 9px; border-radius: 7px; background: #ffffff0d; overflow: auto; }
+.doc pre code { padding: 0; background: none; }
+.doc .table { overflow-x: auto; }
+.doc table { border-collapse: collapse; font-size: 12px; }
+.doc th, .doc td { padding: 5px 8px; border-bottom: 1px solid #ffffff14; text-align: left; vertical-align: top; }
+.doc a { font-size: inherit; }
+@media (max-width: 540px) {
+  header { inset: 18px 20px auto; }
+  aside { top: 66px; right: 20px; max-height: calc(100% - 155px); }
+  select { font-size: 16px; }
+  .toolbar button { width: 42px; height: 42px; }
+}
+#home-nav {position:absolute;left:50%;transform:translateX(-50%);width:auto;padding:0 14px;font-size:12px;background:#10101090;border:1px solid #ffffff16;}
+#home-core {position:absolute;transform:translate(-50%,-50%);border-radius:50%;border:1px solid transparent;}
+#home-core:hover,#home-core:focus-visible {border-color:#fff5;background:transparent;}
+#home-core span {position:absolute;top:calc(100% + 10px);font-size:11px;background:#080808c9;padding:2px 9px;border-radius:14px;}
+#home-panel {left:30px;right:auto;width:min(320px,calc(100% - 60px));background:#101010ef;}
+#home-search {width:100%;border:1px solid #ffffff24;background:#080808;color:#f5f5f5;padding:12px;border-radius:9px;font:inherit;outline-offset:3px;}
+#home-results button,#home-recent button {display:block;width:100%;height:auto;text-align:left;padding:11px 8px;border-radius:7px;color:#ddd;font-size:12px;}
+#home-results small,#home-recent small {display:block;color:#999;font-size:10px;margin-top:3px;}
+.home-empty {font-size:12px;color:#999;padding:12px 0;}
+
+/* Native SF Pro typography, shared by the dashboard and scene navigation. */
+.hub {width:auto;min-width:44px;height:32px;border-radius:9px;padding:0 10px;background:#080d1899;}
+.hub-dot {display:none;}
+.hub-name {position:static;transform:none;padding:0;background:none;font-size:12px;font-weight:500;letter-spacing:-.015em;}
+#home-core span,#home-nav {font-size:13px;font-weight:500;letter-spacing:-.015em;}
+#home-panel {width:min(760px,calc(100% - 60px));padding:28px;background:#0b101bf5;border-color:#a5b9d51c;border-radius:20px;}
+#home-panel h2 {font-size:28px;letter-spacing:-.045em;margin:0;}
+#home-panel .panel-top {margin-bottom:22px;}
+#home-search {background:#ffffff05;border-color:#ffffff18;border-radius:12px;padding:15px 16px;font-size:14px;}
+.home-columns {display:grid;grid-template-columns:1fr 1fr;gap:28px;}
+#home-panel h3 {text-transform:none;letter-spacing:-.015em;font-size:13px;font-weight:500;color:#b8c3d4;margin:26px 0 12px;}
+#home-results {max-height:56vh;overflow:auto;}
+#home-panel section button,#home-results button {display:block;width:100%;height:auto;text-align:left;padding:13px 10px;border-radius:9px;color:#edf1f9;font-size:13px;line-height:1.5;}
+#home-panel small {display:block;color:#8390a6;font-size:11px;margin-top:4px;}
+#home-panel .snippet {color:#b1bdd0;font-size:12px;line-height:1.5;margin-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+#home-panel button:hover {background:#b5c9ff0b;}
+@media(max-width:720px){.home-columns{grid-template-columns:1fr;gap:0;}#home-panel{padding:20px;}}
+
+/* ---- UI refresh: calm glass cards on deep navy, one soft accent (reference: dark dashboard) ---- */
+:root {
+  --bg: #04050a;
+  --surface: rgba(12, 16, 30, .76);
+  --card: rgba(255, 255, 255, .035);
+  --card-hover: rgba(255, 255, 255, .065);
+  --border: rgba(165, 185, 255, .12);
+  --border-strong: rgba(165, 185, 255, .24);
+  --text: #eceff8;
+  --text-2: #c6ccdc;
+  --muted: #8993aa;
+  --accent: #8b9bff;
+  --accent-2: #b79cff;
+  --accent-soft: rgba(139, 155, 255, .14);
+  --ring: rgba(139, 155, 255, .30);
+  --panel: var(--surface);
+  --line: var(--border);
+}
+body { -webkit-font-smoothing: antialiased; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .12); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .2); }
+
+/* top bar */
+header { inset: 22px 28px auto; }
+h1#brand { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; letter-spacing: -.01em; text-transform: none; color: var(--text); }
+h1#brand::before { content: ''; width: 22px; height: 22px; border-radius: 7px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 0 20px rgba(139, 155, 255, .45), inset 0 0 0 1px rgba(255, 255, 255, .28); }
+header button, #home-nav, #browse, #overview { height: 36px; padding: 0 16px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text-2); font-size: 13px; font-weight: 500; letter-spacing: -.01em; backdrop-filter: blur(18px) saturate(140%); transition: background .15s, border-color .15s, color .15s; }
+header button:hover, #home-nav:hover, #browse:hover, #overview:hover { background: rgba(255, 255, 255, .07); border-color: var(--border-strong); color: #fff; }
+#browse[aria-expanded="true"] { background: var(--accent-soft); border-color: var(--ring); color: #fff; }
+
+/* scene labels */
+.hub { height: 30px; padding: 0 13px; border-radius: 999px; background: rgba(12, 16, 30, .6); border: 1px solid var(--border); backdrop-filter: blur(10px); color: var(--text); transition: background .15s, border-color .15s; }
+.hub:hover, .hub:focus-visible { background: var(--accent-soft); border-color: var(--ring); }
+.hub-name { font-size: 12px; font-weight: 500; }
+#home-core span { padding: 3px 13px; border-radius: 999px; background: rgba(12, 16, 30, .6); border: 1px solid var(--border); backdrop-filter: blur(10px); font-size: 12px; font-weight: 500; }
+
+/* bottom controls */
+.toolbar { gap: 2px; padding: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; backdrop-filter: blur(18px) saturate(140%); box-shadow: 0 10px 40px rgba(0, 0, 0, .45); }
+.toolbar button { width: 36px; height: 36px; color: var(--muted); font-size: 15px; transition: background .15s, color .15s; }
+.toolbar button:hover { background: var(--card-hover); color: #fff; }
+.toolbar button[aria-pressed="false"] { color: var(--accent); }
+
+/* panels */
+aside { top: 84px; padding: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; backdrop-filter: blur(28px) saturate(150%); box-shadow: 0 24px 80px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .05); }
+.panel-top { margin-bottom: 16px; }
+label[for="pages"] { color: var(--text); font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
+#close-panel, #close-home { width: 30px; height: 30px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font-size: 16px; line-height: 1; }
+#close-panel:hover, #close-home:hover { background: var(--card-hover); color: #fff; }
+
+/* fields */
+#search, #home-search, select { width: 100%; height: 42px; margin-bottom: 10px; padding: 0 14px 0 40px; border: 1px solid var(--border); border-radius: 12px; background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238993aa' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 14px center; color: var(--text); font-size: 14px; outline: none; transition: border-color .15s, box-shadow .15s; }
+#search::placeholder, #home-search::placeholder { color: var(--muted); }
+#search:focus, #home-search:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+select { -webkit-appearance: none; appearance: none; padding-left: 14px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238993aa' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right 14px center; }
+#home-search { height: 48px; margin-bottom: 0; font-size: 15px; }
+
+/* result and list rows */
+#results button, #home-results button, #home-panel section button { display: block; width: 100%; height: auto; padding: 11px 12px; text-align: left; border: 1px solid transparent; border-radius: 12px; color: var(--text); font-size: 13px; font-weight: 500; line-height: 1.45; letter-spacing: -.005em; }
+#results button:hover, #results button.current, #home-results button:hover, #home-panel section button:hover { background: var(--card-hover); border-color: var(--border); color: #fff; }
+#results small, #home-panel small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; font-weight: 400; }
+#home-panel .snippet { color: var(--text-2); font-size: 12px; font-weight: 400; }
+
+/* Home */
+#home-panel { width: min(820px, calc(100% - 60px)); padding: 30px; border-radius: 22px; background: var(--surface); border-color: var(--border); }
+#home-panel h2 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -.035em; }
+#home-panel .panel-top { margin-bottom: 20px; }
+#home-results { margin-top: 14px; }
+.home-columns { gap: 16px; margin-top: 20px; align-items: start; }
+#home-feed section { padding: 18px 10px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 18px; }
+#home-panel h3 { margin: 0 0 10px 12px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+/* reading */
+#category { display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 600; letter-spacing: .06em; }
+#title { margin: 12px 0 8px; font-size: 24px; font-weight: 600; letter-spacing: -.035em; line-height: 1.2; }
+#meta { margin: 0 0 14px; color: var(--muted); font-size: 12px; }
+#open-page { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 9px; color: var(--text-2); font-size: 12px; font-weight: 500; text-decoration: none; transition: background .15s, color .15s; }
+#open-page:hover { background: var(--card-hover); color: #fff; }
+.doc { margin-top: 20px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 14px; line-height: 1.7; color: var(--text-2); }
+.doc h2, .doc h3, .doc h4, .doc h5, .doc h6 { margin: 22px 0 8px; color: var(--text); font-size: 13px; font-weight: 600; }
+.doc a { color: #a9b5ff; text-decoration: underline; text-decoration-color: rgba(169, 181, 255, .35); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.doc a:hover { text-decoration-color: #a9b5ff; }
+.doc blockquote { border-left: 2px solid var(--accent); color: var(--text-2); }
+.doc code, .doc pre { background: rgba(255, 255, 255, .06); }
+.doc pre { border: 1px solid var(--border); border-radius: 10px; }
+#panel h3 { margin: 24px 0 8px; }
+#neighbors button { padding: 10px 4px; border-bottom: 1px solid var(--border); color: var(--text-2); font-weight: 400; }
+#neighbors button:hover { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+
+/* ---- Monochrome pass: dark gray glass, white accents (reference: vault graph video) ---- */
+:root {
+  --bg: #030303;
+  --surface: rgba(17, 17, 19, .80);
+  --card: rgba(255, 255, 255, .035);
+  --card-hover: rgba(255, 255, 255, .07);
+  --border: rgba(255, 255, 255, .09);
+  --border-strong: rgba(255, 255, 255, .2);
+  --text: #ededed;
+  --text-2: #bdbdbd;
+  --muted: #8b8b8b;
+  --accent: #e9e9e9;
+  --accent-2: #9a9a9a;
+  --accent-soft: rgba(255, 255, 255, .08);
+  --ring: rgba(255, 255, 255, .22);
+}
+#sky-source { filter: grayscale(1) brightness(.55) contrast(1.15); opacity: .42; }
+#sky { filter: grayscale(1) brightness(.8); }
+h1#brand::before { display: none; }
+.doc a { color: #e4e4e4; text-decoration-color: rgba(255, 255, 255, .3); }
+.doc a:hover { text-decoration-color: #fff; }
+.doc .idea-focus { background: rgba(255, 255, 255, .1); box-shadow: 0 0 0 6px rgba(255, 255, 255, .1); border-radius: 4px; transition: background .6s, box-shadow .6s; }
+/* group labels: plain text like the reference, name over a quiet count */
+.hub { height: auto; min-width: 0; padding: 4px 9px; display: flex; flex-direction: column; align-items: center; gap: 1px; background: transparent; border: 1px solid transparent; backdrop-filter: none; border-radius: 10px; text-shadow: 0 0 10px #000, 0 0 2px #000; }
+.hub:hover, .hub:focus-visible { background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .12); }
+.hub-name { font-size: 12px; font-weight: 600; letter-spacing: -.01em; color: #f4f4f4; }
+.hub-count { font-size: 10px; color: #9a9a9a; pointer-events: none; }
+#home-core span { background: rgba(18, 18, 20, .7); }
+
+/* ---- Home: centered dark glass dashboard ---- */
+#home-panel { left: 50%; right: auto; transform: translateX(-50%); top: 84px; width: min(1100px, calc(100% - 64px)); max-height: calc(100% - 170px); padding: 28px; border-radius: 22px; background: rgba(13, 13, 15, .74); border-color: rgba(255, 255, 255, .09); backdrop-filter: blur(22px) saturate(110%); box-shadow: 0 30px 90px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .05); }
+#home-panel h3 { margin: 0 0 12px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+#home-feed section h3 { margin-left: 12px; }
+#home-dash { margin-top: 20px; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.kpi { padding: 16px 18px; background: var(--card); border: 1px solid var(--border); border-radius: 16px; }
+.kpi b { display: block; font-size: 28px; font-weight: 600; letter-spacing: -.03em; line-height: 1.1; color: #f2f2f2; font-variant-numeric: tabular-nums; }
+.kpi span { display: block; margin-top: 4px; font-size: 12px; color: var(--text-2); }
+.kpi small { display: block; margin-top: 2px; font-size: 11px; color: var(--muted); }
+.dash-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 12px; margin-top: 12px; }
+.chart-card { padding: 16px 16px 12px; background: var(--card); border: 1px solid var(--border); border-radius: 16px; min-width: 0; }
+.chart svg { display: block; width: 100%; height: 210px; overflow: visible; }
+.chart .bar { fill: url(#bar-fill); }
+.chart .bar:hover, .chart .hit:hover + .bar { fill: #ffffff; }
+.chart .grid { stroke: rgba(255, 255, 255, .07); stroke-width: 1; }
+.chart text { fill: var(--muted); font-size: 10px; font-family: inherit; }
+.bar-list { display: flex; flex-direction: column; gap: 2px; }
+#home-panel .bar-list button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; width: 100%; height: auto; padding: 6px 8px; text-align: left; border: 1px solid transparent; border-radius: 10px; color: var(--text); font-size: 12px; font-weight: 500; }
+#home-panel .bar-list button:hover { background: var(--card-hover); border-color: var(--border); }
+.bar-list .name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.bar-list .value { color: var(--text-2); font-variant-numeric: tabular-nums; font-weight: 400; }
+.bar-list .track { display: block; grid-column: 1 / -1; height: 6px; border-radius: 0 4px 4px 0; background: rgba(255, 255, 255, .05); overflow: hidden; }
+.bar-list .fill { display: block; height: 100%; border-radius: 0 4px 4px 0; background: #cfcfcf; }
+.bar-list button:hover .fill { background: #fff; }
+#chart-tip { position: absolute; z-index: 5; padding: 6px 10px; border-radius: 8px; background: rgba(28, 28, 30, .96); border: 1px solid rgba(255, 255, 255, .14); color: #efefef; font-size: 12px; pointer-events: none; white-space: nowrap; box-shadow: 0 8px 24px rgba(0, 0, 0, .5); }
+#chart-tip small { display: block; color: var(--muted); font-size: 11px; }
+.home-columns { margin-top: 12px; }
+#home-results { margin-top: 12px; }
+@media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, 1fr); } .dash-grid { grid-template-columns: 1fr; } }
+
+/* ---- Home color pass: charcoal cards with orange, mint and sky accents (reference: analytics dashboard) ---- */
+#home-panel { --c-pages: #ff7a1a; --c-ideas: #14e89a; --c-links: #2f8cff; --c-updates: #a855ff; --ring: rgba(255, 255, 255, .16); background: rgba(20, 20, 23, .8); }
+#home-panel #home-search:focus { border-color: rgba(255, 255, 255, .42); box-shadow: 0 0 0 3px var(--ring); }
+.home-date { margin-left: 10px; padding: 3px 9px; border-radius: 999px; background: rgba(255, 255, 255, .06); border: 1px solid var(--border); color: var(--text-2); font-size: 11px; font-weight: 500; letter-spacing: 0; vertical-align: middle; }
+#home-panel .kpi { position: relative; overflow: hidden; border-left: 2px solid var(--kpi); background: linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .015)); }
+.kpi .chip { font-style: normal; position: absolute; top: 14px; right: 14px; padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 600; color: var(--text); background: color-mix(in srgb, var(--kpi) 24%, transparent); border: 1px solid color-mix(in srgb, var(--kpi) 40%, transparent); }
+.kpi .spark { display: flex; align-items: flex-end; gap: 3px; height: 30px; margin-top: 12px; }
+.kpi .spark i { flex: 1; min-height: 2px; border-radius: 3px 3px 0 0; background: var(--kpi); }
+#home-panel .chart-card h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; text-transform: none; color: var(--text); }
+#home-panel .chart-card .sub { margin: 2px 0 12px; font-size: 12px; color: var(--muted); }
+.chart-card { background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .015)); }
+#chart-groups { --bar: var(--c-ideas); }
+#chart-connected { --bar: var(--c-links); }
+.bar-list .fill { background: var(--bar, #cfcfcf); }
+.bar-list button:hover .fill { background: var(--bar, #fff); filter: brightness(1.2); }
+.chart .bar:hover, .chart .hit:hover + .bar { fill: url(#bar-hover); }
+
+/* ---- Opening debrief: plain text on the left; the map slides right so no orb sits under it ---- */
+:root { --debrief-left: 44px; --debrief-width: 340px; --debrief-shift: 0px; }
+#debrief { position: absolute; z-index: 2; left: var(--debrief-left); top: 96px; width: var(--debrief-width); max-height: calc(100% - 180px); overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; color: var(--text); text-shadow: 0 1px 14px #000, 0 0 3px #000; transition: opacity .6s ease, transform .6s ease; }
+#debrief.leaving { opacity: 0; transform: translateX(-14px); pointer-events: none; }
+#debrief h2 { margin: 0; font-size: 30px; font-weight: 600; letter-spacing: -.035em; line-height: 1.15; color: #f5f5f5; }
+#debrief .since { margin-top: 9px; font-size: 12px; color: #8f8f8f; opacity: 0; transition: opacity .6s ease; }
+#debrief .since.on { opacity: 1; }
+#debrief .w { opacity: 0; transition: opacity .5s ease; }
+#debrief .w.on { opacity: 1; }
+#debrief-text { margin-top: 22px; font-size: 15px; line-height: 1.65; color: #dadada; }
+#debrief-text .sentence { border-radius: 5px; transition: color .2s, background .2s, box-shadow .2s; }
+#debrief-text .sentence[data-pages]:hover { color: #fff; background: rgba(231, 184, 90, .1); box-shadow: 0 0 0 3px rgba(231, 184, 90, .1); }
+#debrief .caret { display: inline-block; width: 2px; height: 1.05em; margin-left: 3px; vertical-align: -2px; background: #e7b85a; box-shadow: 0 0 8px #e7b85a80; animation: debrief-caret 1s steps(1) infinite; }
+@keyframes debrief-caret { 50% { opacity: 0; } }
+#debrief .later { opacity: 0; transform: translateY(4px); transition: opacity .7s ease, transform .7s ease; }
+#debrief .later.on { opacity: 1; transform: none; }
+#debrief h3 { margin: 26px 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #8b8b8b; }
+#debrief-upcoming { list-style: none; margin: 0; padding: 0; }
+#debrief-upcoming li { display: grid; grid-template-columns: 70px 1fr; gap: 10px; padding: 5px 0; font-size: 13px; line-height: 1.45; color: #cdcdcd; }
+#debrief-upcoming b { font-weight: 600; color: #ec8d4a; font-variant-numeric: tabular-nums; }
+#debrief-links { display: flex; flex-wrap: wrap; gap: 2px 18px; margin-top: 18px; }
+#debrief-links button { width: auto; height: auto; padding: 4px 0; border-radius: 0; color: #52d3a6; font-size: 13px; font-weight: 500; text-shadow: inherit; }
+#debrief-links button:hover { background: none; color: #93f2cf; }
+#debrief::-webkit-scrollbar { display: none; }
+@media (max-width: 900px), (max-height: 760px) { :root { --debrief-left: 26px; --debrief-width: 290px; } #debrief { top: 84px; } #debrief h2 { font-size: 25px; } #debrief-text { margin-top: 16px; font-size: 14px; line-height: 1.58; } #debrief h3 { margin-top: 18px; } }
+body.debriefing .stage { transform: translateX(calc(var(--reading-shift) + var(--debrief-shift))); -webkit-mask-image: linear-gradient(90deg, transparent, #000 180px); mask-image: linear-gradient(90deg, transparent, #000 180px); }
+@media (prefers-reduced-motion: reduce) { #debrief .w, #debrief .since, #debrief .later { transition: none; } #debrief .caret { animation: none; } }
+/* ---- Subtle heading: owner and live frame rate under the app name ---- */
+#brand-block { pointer-events: none; }
+#brand-sub { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 11px; font-weight: 400; letter-spacing: .01em; color: #7d7d7d; }
+#brand-sub .dot { color: #4d4d4d; }
+#fps { font-variant-numeric: tabular-nums; min-width: 42px; }
+#fps.slow { color: #c98a4a; }
+/* ---- Home colors: one vivid hue per meaning (pages orange, ideas green, links blue, updates violet) ---- */
+#home-panel .kpi .spark i { background: linear-gradient(180deg, color-mix(in srgb, var(--kpi) 88%, #fff), var(--kpi) 60%); box-shadow: 0 0 12px color-mix(in srgb, var(--kpi) 45%, transparent); }
+#home-panel .kpi { border-left-width: 3px; }
+#home-panel .kpi b { color: #fff; }
+.kpi .chip { color: color-mix(in srgb, var(--kpi) 55%, #fff); background: color-mix(in srgb, var(--kpi) 18%, transparent); border-color: color-mix(in srgb, var(--kpi) 45%, transparent); }
+.bar-list .fill { background: linear-gradient(90deg, var(--bar) 55%, color-mix(in srgb, var(--bar) 82%, #fff)); box-shadow: 0 0 12px color-mix(in srgb, var(--bar) 40%, transparent); }
+.bar-list button:hover .fill { filter: brightness(1.25); }
+#home-panel .chart-card h3 { display: flex; align-items: center; gap: 8px; }
+#home-panel .chart-card h3::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--card); box-shadow: 0 0 8px var(--card); }
+#home-panel .chart-card:nth-child(1) { --card: var(--c-updates); }
+#home-panel .chart-card:nth-child(2) { --card: var(--c-ideas); }
+#home-panel .chart-card:nth-child(3) { --card: var(--c-links); }
+.chart .bar { filter: drop-shadow(0 0 6px rgba(176, 114, 255, .35)); }
+
+/* ---- Home opening: cards rise in, numbers roll up, bars shoot up from the bottom and slide out from the left ---- */
+@keyframes home-rise { from { opacity: 0; transform: translateY(14px) scale(.985); } }
+@keyframes home-grow-up { 0% { transform: scaleY(0); } 70% { transform: scaleY(1.06); } 100% { transform: scaleY(1); } }
+@keyframes home-grow-right { 0% { transform: scaleX(0); } 72% { transform: scaleX(1.03); } 100% { transform: scaleX(1); } }
+@keyframes home-fade { from { opacity: 0; } }
+#home-panel.intro .kpi { animation: home-rise .55s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 70ms); }
+#home-panel.intro .kpi .spark i { transform-origin: 50% 100%; animation: home-grow-up .55s cubic-bezier(.25, .9, .3, 1) both; animation-delay: calc(180ms + var(--i, 0) * 70ms + var(--j, 0) * 45ms); }
+#home-panel.intro .chart-card, #home-panel.intro #home-feed section { animation: home-rise .6s cubic-bezier(.2, .8, .2, 1) both; animation-delay: 260ms; }
+#home-panel.intro .chart-card:nth-child(2) { animation-delay: 330ms; }
+#home-panel.intro .chart-card:nth-child(3) { animation-delay: 400ms; }
+#home-panel.intro #home-feed section { animation-delay: 480ms; }
+#home-panel.intro #home-feed section + section { animation-delay: 540ms; }
+#home-panel.intro .chart .bar { transform-box: fill-box; transform-origin: 50% 100%; animation: home-grow-up .6s cubic-bezier(.25, .9, .3, 1) both; animation-delay: calc(420ms + var(--j, 0) * 16ms); }
+#home-panel.intro .chart .grid, #home-panel.intro .chart text { animation: home-fade .6s ease both; animation-delay: 320ms; }
+#home-panel.intro .bar-list .fill { transform-origin: 0 50%; animation: home-grow-right .75s cubic-bezier(.25, .9, .3, 1) both; animation-delay: calc(460ms + var(--j, 0) * 60ms); }
+@media (prefers-reduced-motion: reduce) { #home-panel.intro * { animation: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div id="brand-block">
+      <h1 id="brand">Second Brain</h1>
+      <p id="brand-sub"><span id="owner">@@OWNER@@</span><span class="dot" aria-hidden="true">·</span><span id="fps" title="Frames per second" aria-label="Frames per second">– fps</span></p>
+    </div>
+    <button id="home-nav" type="button" aria-controls="home-panel">Home</button>
+    <button id="overview" type="button" hidden>← Overview</button>
+    <button id="browse" type="button" aria-expanded="false" aria-controls="panel">Pages</button>
+  </header>
+  <section class="stage" aria-label="3D brain">
+    <canvas id="sky" aria-hidden="true" hidden></canvas>
+    <canvas id="signals" aria-hidden="true"></canvas>
+    <canvas id="graph" role="img" aria-label="Interactive 3D wiki. Drag to rotate, scroll to zoom. Use Pages to select a page with the keyboard."></canvas>
+    <div id="hubs"></div>
+    <button id="home-core" aria-label="Open Home" title="Home"><span>Home</span></button>
+  </section>
+  <div class="toolbar" aria-label="Map controls">
+    <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+    <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+    <button id="reset" type="button" aria-label="Reset view" title="Reset view">↺</button>
+    <button id="motion" type="button" aria-pressed="true" aria-label="Pause glow" title="Pause glow">Ⅱ</button>
+    <button id="fullscreen" type="button" aria-label="Enter full screen" title="Full screen">⛶</button>
+  </div>
+  <section id="debrief" aria-label="What changed since your last visit" aria-live="polite" hidden>
+    <h2 id="debrief-greeting"></h2>
+    <p id="debrief-since" class="since"></p>
+    <p id="debrief-text"></p>
+    <div id="debrief-coming" class="later" hidden><h3>Coming up</h3><ul id="debrief-upcoming"></ul></div>
+    <div id="debrief-links" class="later" hidden></div>
+  </section>
+  <aside id="panel" aria-label="Pages" hidden>
+    <div class="panel-top">
+      <label for="pages">Pages</label>
+      <button id="close-panel" type="button" aria-label="Close pages">×</button>
+    </div>
+    <input id="search" type="search" placeholder="Search pages (press / anywhere)" autocomplete="off" aria-controls="results">
+    <ul id="results" aria-label="Search results" hidden></ul>
+    <select id="pages"><option value="">Choose a page</option></select>
+    <div id="detail" hidden>
+      <p id="category" class="eyebrow"></p>
+      <h2 id="title"></h2>
+      <p id="meta"></p>
+      <p id="path"></p>
+      <a id="open-page" target="_blank" rel="noopener">Open file ↗</a>
+      <div id="page-body" class="doc"></div>
+      <h3 id="connections"></h3>
+      <ul id="neighbors"></ul>
+    </div>
+  </aside>
+  <aside id="home-panel" aria-label="Home" hidden>
+    <div class="panel-top"><h2>Home <span id="home-date" class="home-date"></span></h2><button id="close-home" aria-label="Close Home">×</button></div>
+    <input id="home-search" type="search" placeholder="Search every page and conversation…" aria-label="Search full summaries and titles" autocomplete="off">
+    <div id="home-results" aria-live="polite"></div>
+    <div id="home-dash">
+      <div class="kpis" id="home-kpis"></div>
+      <div class="dash-grid">
+        <section class="chart-card" aria-labelledby="activity-title"><h3 id="activity-title">Pages updated</h3><p class="sub">Per day, last 30 days</p><div id="chart-activity" class="chart"></div></section>
+        <section class="chart-card" aria-labelledby="groups-title"><h3 id="groups-title">Ideas by group</h3><p class="sub">Sections per group · click to fly there</p><div id="chart-groups" class="bar-list"></div></section>
+        <section class="chart-card" aria-labelledby="connected-title"><h3 id="connected-title">Most connected pages</h3><p class="sub">Links to other pages · click to open</p><div id="chart-connected" class="bar-list"></div></section>
+      </div>
+    </div>
+    <div id="chart-tip" role="tooltip" hidden></div>
+    <div id="home-feed" class="home-columns"><section><h3>Recent activity</h3><div id="home-recent"></div></section><section><h3>Newest conversation summaries</h3><div id="home-conversations"></div></section></div>
+  </aside>
+</main>
+<script id="data" type="application/json">@@GRAPH@@</script>
+<script>
+const {nodes, edges, regions} = JSON.parse(document.getElementById('data').textContent);
+// Six independent star clusters surrounding the Home black hole.
+// One continuous disc around the Home black hole. Each group is a wedge sized by its page count,
+// and neighbouring wedges overlap a little so the map reads as one vault, not six islands.
+const groupOrder = ['Knowledge', 'Projects', 'Decisions', 'Reference notes', 'Reviews', 'Plans'];
+const rankOf = name => { const i = groupOrder.indexOf(name); return i < 0 ? 99 : i; };
+const groupNames = Object.keys(regions).sort((a, b) => rankOf(a) - rankOf(b));
+const groupWeights = groupNames.map(name => Math.max(1, nodes.filter(n => n.region === name).length) ** .6);
+const weightSum = groupWeights.reduce((a, b) => a + b, 0);
+const sectors = {};
+let sweep = -Math.PI * groupWeights[0] / weightSum;
+groupNames.forEach((name, g) => { const width = 2 * Math.PI * groupWeights[g] / weightSum; sectors[name] = {start: sweep, width}; sweep += width; });
+const frac = x => x - Math.floor(x);
+const discOrbits = nodes.map((node, i) => {
+  const sector = sectors[node.region];
+  const siblings = nodes.reduce((list, n, j) => { if (n.region === node.region) list.push(j); return list; }, []);
+  const slot = siblings.indexOf(i);
+  const u = frac(.5 + slot * .7548776662), v = frac(.5 + slot * .5698402910);
+  const angle = sector.start - sector.width * .16 + sector.width * 1.32 * u;
+  const radius = .34 + .72 * Math.sqrt(v);
+  const z = (frac(Math.sin(i * 12.9898 + 4.1) * 43758.5453) - .5) * .26;
+  return [radius * Math.cos(angle), radius * Math.sin(angle) * .9, z];
+});
+Object.entries(regions).forEach(([name, r]) => {
+  const own = discOrbits.filter((_, i) => nodes[i].region === name);
+  const mid = sectors[name].start + sectors[name].width / 2;
+  r.center = own.length ? [0, 1, 2].map(axis => own.reduce((sum, p) => sum + p[axis], 0) / own.length) : [.7 * Math.cos(mid), .63 * Math.sin(mid), 0];
+  r.spread = r.spread.map(v => v * .76);
+});
+
+const get = id => document.getElementById(id);
+const canvas = get('graph');
+const ctx = canvas.getContext('2d');
+const signalCanvas = get('signals');
+const signalCtx = signalCanvas.getContext('2d');
+let lastStarDraw = null;
+const menu = get('pages');
+const neighbors = nodes.map(() => []);
+const order = nodes.map((_, i) => i).sort((a, b) => nodes[a].title.localeCompare(nodes[b].title));
+const defaultView = {yaw: 0.12, pitch: -0.08, zoom: .86, center: [0, 0, 0]};
+const view = {...defaultView};
+let region = null;
+let cameraMove = null;
+const cameraDuration = 1200;
+let selected = null;
+let hovered = null;
+let hoveredIdea = null;
+let projected = [];
+let projectedIdeas = [];
+let spin = 0;
+let drag = null;
+let pendingFrame = false;
+let glowTime = 0;
+let lastTick = null;
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+let glowEnabled = !reducedMotion.matches;
+
+for (const [a, b] of edges) {
+  neighbors[a].push(b);
+  neighbors[b].push(a);
+}
+for (const i of order) menu.add(new Option(nodes[i].title, String(i)));
+
+// Pages changed since the previous visit glow gold. First visit: the last 48 hours.
+let storedVisit = 0;
+const lastVisit = (() => {
+  try {
+    storedVisit = Number(localStorage.getItem('brain3d.lastVisit')) || 0;
+    const previous = storedVisit || Date.now() - 48 * 3600e3;
+    localStorage.setItem('brain3d.lastVisit', String(Date.now()));
+    return previous;
+  } catch { return Date.now() - 48 * 3600e3; }
+})();
+const isNew = nodes.map(node => node.modified > lastVisit);
+
+// Search titles first, then page text.
+const searchText = nodes.map(node => {
+  const scratch = document.createElement('div');
+  scratch.innerHTML = node.html;
+  return scratch.textContent.toLowerCase();
+});
+let results = [], current = 0;
+function runSearch() {
+  const query = get('search').value.trim().toLowerCase();
+  const list = get('results');
+  list.hidden = !query;
+  if (!query) return;
+  const words = query.split(/\s+/);
+  const score = i => {
+    const title = nodes[i].title.toLowerCase();
+    if (words.every(w => title.includes(w))) return title.startsWith(words[0]) ? 0 : 1;
+    return words.every(w => title.includes(w) || searchText[i].includes(w)) ? 2 : null;
+  };
+  results = order.map(i => [i, score(i)]).filter(([, s]) => s !== null).sort((a, b) => a[1] - b[1]).map(([i]) => i);
+  current = 0;
+  list.replaceChildren(...(results.length ? results.slice(0, 30).map((i, n) => {
+    const item = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.classList.toggle('current', n === 0);
+    button.append(nodes[i].title);
+    if (isNew[i]) button.append(Object.assign(document.createElement('span'), {className: 'new-tag', textContent: 'new'}));
+    button.append(Object.assign(document.createElement('small'), {textContent: `${nodes[i].category} · ${nodes[i].region}`}));
+    button.addEventListener('click', () => pickResult(i));
+    item.append(button);
+    return item;
+  }) : [Object.assign(document.createElement('li'), {className: 'empty', textContent: 'No pages match'})]));
+}
+function pickResult(i) {
+  get('search').value = '';
+  get('results').hidden = true;
+  selectPage(i);
+}
+get('search').addEventListener('input', runSearch);
+get('search').addEventListener('keydown', event => {
+  const buttons = [...get('results').querySelectorAll('button')];
+  if (event.key === 'Enter' && results.length) pickResult(results[current]);
+  else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && buttons.length) {
+    event.preventDefault();
+    current = (current + (event.key === 'ArrowDown' ? 1 : buttons.length - 1)) % buttons.length;
+    buttons.forEach((b, n) => b.classList.toggle('current', n === current));
+    buttons[current].scrollIntoView({block: 'nearest'});
+  } else return;
+  event.stopPropagation();
+});
+document.addEventListener('keydown', event => {
+  if (event.key !== '/' || event.target.matches('input, select, textarea')) return;
+  event.preventDefault();
+  setPanelOpen(true);
+  get('search').focus();
+});
+const whiteGlow = glowSprite('#ffffff');
+const whiteOrb = orbSprite('#ffffff');
+const clusters = Object.entries(regions).map(([name, region], index) => {
+  const rng = randomSource(index + 23);
+  const particles = Array.from({length: 0}, () => {
+    const position = region.center.map((value, axis) => {
+      const offset = Math.max(-2.5, Math.min(2.5, (rng() + rng() + rng() + rng() - 2) * 1.34));
+      return value + offset * region.spread[axis];
+    });
+    const distance = Math.hypot(...position.map((value, axis) => (value - region.center[axis]) / region.spread[axis]));
+    return {position, distance, size: 0.55 + 1.45 * rng() ** 1.6, intensity: 0.28 + 0.72 * rng()};
+  });
+  return {name, ...region, particles, phase: index * 0.83, sprite: whiteGlow, orb: whiteOrb};
+});
+
+@@LENSING@@
+@@SKY@@
+
+let skyRenderer;
+try {
+  skyRenderer = createSkyRenderer(get('sky'), get('sky-source'));
+} catch (error) {
+  console.error('Sky renderer unavailable', error);
+}
+
+let lensRenderer;
+let liveCamera = null;
+let liveVisibility = null;
+try {
+  lensRenderer = createLensRenderer(clusters);
+  if (lensRenderer) {
+    lensRenderer.surface.id = 'phenomena';
+    lensRenderer.surface.setAttribute('aria-hidden', 'true');
+    signalCanvas.before(lensRenderer.surface);
+  }
+} catch (error) {
+  console.error('Lensing unavailable', error);
+}
+
+// Stable, volumetric page positions: every page is a small star inside its group.
+// Page positions come from the disc layout above.
+const pageOrbits = discOrbits;
+// The whole map turns slowly in its own plane around the black hole.
+function spinPos(p) {
+  const c = Math.cos(spin), s = Math.sin(spin);
+  return [p[0]*c - p[1]*s, p[0]*s + p[1]*c, p[2]];
+}
+function pageBase(index, time = glowTime) {
+  return pageOrbits[index].map((v,axis) => v + .006*Math.sin(time*(.13+axis*.027)+index*1.71+axis*2.1));
+}
+function pageWorldPosition(index, time = glowTime) {
+  return spinPos(pageBase(index, time));
+}
+function projectPagePosition(index, camera, time = glowTime) {
+  return project(pageWorldPosition(index,time),camera);
+}
+
+function hash(n) {
+  n = Math.imul(n ^ 61, 0x27d4eb2d); n ^= n >>> 15; n = Math.imul(n, 0x2c1b3c6d); n ^= n >>> 12;
+  return (n >>> 0) / 4294967296;
+}
+// Ideas: every h2/h3 section of a page is one tiny orb fanning out from its page.
+const ideas = [];
+nodes.forEach((node, page) => (node.ideas || []).forEach((title, k) => ideas.push({page, k, title})));
+const seeded = seed => randomSource(Math.floor(hash(seed) * 4294967296));
+const ideaOffsets = ideas.map(idea => {
+  const rng = seeded(idea.page * 7919 + idea.k * 104729 + 11);
+  const count = nodes[idea.page].ideas.length;
+  const y = 1 - 2 * (idea.k + .5) / count;
+  const ring = Math.sqrt(Math.max(0, 1 - y*y));
+  const angle = idea.k * 2.399963229728653 + rng() * 6.2832;
+  const reach = .03 + .11 * rng() ** 1.6;
+  return [ring*Math.cos(angle)*reach, y*reach*.85, ring*Math.sin(angle)*reach];
+});
+function ideaWorldPosition(n, time = glowTime) {
+  const base = pageBase(ideas[n].page, time), o = ideaOffsets[n];
+  return spinPos(base.map((v,axis) => v + o[axis] + .003*Math.sin(time*(.21+axis*.05)+n*1.3+axis)));
+}
+for (const cluster of clusters) {
+  let extent = .2;
+  const grow = p => { extent = Math.max(extent, Math.hypot(...p.map((v,a) => v - cluster.center[a]))); };
+  nodes.forEach((node, i) => { if (node.region === cluster.name) grow(pageOrbits[i]); });
+  ideas.forEach((idea, n) => { if (nodes[idea.page].region === cluster.name) grow(pageOrbits[idea.page].map((v,a) => v + ideaOffsets[n][a])); });
+  cluster.extent = regions[cluster.name].extent = extent;
+}
+
+// Comets: bright heads with long fading tails on wide orbits outside the groups.
+const comets = Array.from({length: 13}, (_, j) => {
+  const r = seeded(900 + j * 37);
+  return {radius: 1.22 + .5*r(), tilt: (r()-.5)*1.2, node: r()*6.2832, speed: (.07 + .09*r()) * (r() < .5 ? -1 : 1),
+          phase: r()*6.2832, tail: .65 + .7*r(), brightness: .5 + .5*r()};
+});
+function cometWorld(c, angle) {
+  const x = Math.cos(angle)*c.radius, y = Math.sin(angle)*c.radius*.94;
+  const y1 = y*Math.cos(c.tilt), z1 = y*Math.sin(c.tilt);
+  const cn = Math.cos(c.node), sn = Math.sin(c.node);
+  return [x*cn - y1*sn, x*sn + y1*cn, z1];
+}
+// Light beads: small lights travelling along page links and idea spokes.
+const beadLinks = [
+  ...ideas.map((idea, n) => ({spoke: true, page: idea.page, idea: n})),
+  ...edges.map(([a, b]) => ({spoke: false, a, b})),
+];
+const beadCount = Math.min(320, beadLinks.length);
+
+let recentPaths = [];
+try { const saved=JSON.parse(localStorage.getItem('second-brain-recent') || '[]'); if(Array.isArray(saved)) recentPaths=saved.filter(p=>typeof p==='string').slice(0,8); } catch {}
+function rememberPage(index) {
+  const path=nodes[index].path;
+  recentPaths=[path,...recentPaths.filter(p=>p!==path)].slice(0,8);
+  try {localStorage.setItem('second-brain-recent',JSON.stringify(recentPaths));} catch {}
+}
+function homePageButton(index, subtitle, query = '') {
+  const button=document.createElement('button');button.type='button';
+  const title=document.createElement('span');title.textContent=nodes[index].title;
+  const detail=document.createElement('small');detail.textContent=typeof subtitle==='string'?subtitle:nodes[index].region;
+  button.append(title,detail);
+  if(query){
+    const text=document.createElement('div');text.innerHTML=nodes[index].html||'';
+    const body=text.textContent.replace(/\s+/g,' ').trim();
+    const at=body.toLowerCase().indexOf(query.split(/\s+/)[0]);
+    const start=Math.max(0,at-65), snippet=document.createElement('div');snippet.className='snippet';
+    snippet.textContent=(start?'…':'')+body.slice(start,start+220);button.append(snippet);
+  }
+  button.addEventListener('click',()=>{get('home-panel').hidden=true;selectPage(index);});return button;
+}
+// Home dashboard: quick numbers and three small charts built from the wiki itself.
+const dayMs = 864e5;
+const dayKey = t => { const d = new Date(t); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+const touched = node => { const t = Date.parse(node.updated); return Number.isFinite(t) ? t + 12 * 3600e3 : node.modified; };
+function chartTip(event, title, detail) {
+  const tip = get('chart-tip'), panel = get('home-panel').getBoundingClientRect();
+  tip.replaceChildren(document.createTextNode(title), Object.assign(document.createElement('small'), {textContent: detail}));
+  tip.hidden = false;
+  const x = Math.min(event.clientX - panel.left + 12, panel.width - tip.offsetWidth - 8);
+  tip.style.left = x + 'px';
+  tip.style.top = (event.clientY - panel.top + get('home-panel').scrollTop - tip.offsetHeight - 10) + 'px';
+}
+function hideTip() { get('chart-tip').hidden = true; }
+// Numbers roll up from zero when Home opens.
+function countUp(element, value, duration = 900) {
+  const start = performance.now();
+  const step = now => {
+    const t = Math.min(1, (now - start) / duration), eased = 1 - (1 - t) ** 3;
+    element.textContent = Math.round(value * eased).toLocaleString();
+    if (t < 1 && element.isConnected) requestAnimationFrame(step);
+  };
+  element.textContent = '0';
+  requestAnimationFrame(step);
+}
+function renderDashboard() {
+  const now = Date.now();
+  const weekAgo = now - 7 * dayMs;
+  const fresh = nodes.filter(n => touched(n) >= weekAgo).length;
+  get('home-date').textContent = new Date(now).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'});
+  const byGroup = clusters.map(c => c.name);
+  const perGroup = fn => byGroup.map(name => fn(name)).sort((a, b) => a - b);
+  // Each tile: big number, label, detail, a quiet chip, and mini bars (lighter to stronger) from real counts.
+  const kpi = (value, label, detail, chip, bars, color, barsLabel) => {
+    const tile = Object.assign(document.createElement('div'), {className: 'kpi'});
+    tile.style.setProperty('--kpi', color);
+    const spark = Object.assign(document.createElement('div'), {className: 'spark', title: barsLabel});
+    const top = Math.max(1, ...bars);
+    bars.forEach((v, k) => { const bar = document.createElement('i'); bar.style.height = Math.max(6, 100 * v / top) + '%'; bar.style.opacity = (.55 + .45 * k / Math.max(1, bars.length - 1)).toFixed(2); bar.style.setProperty('--j', k); spark.append(bar); });
+    const number = Object.assign(document.createElement('b'), {textContent: value.toLocaleString()});
+    if (get('home-panel').classList.contains('intro') && !reducedMotion.matches) countUp(number, value);
+    tile.append(number,
+      Object.assign(document.createElement('span'), {textContent: label}),
+      Object.assign(document.createElement('small'), {textContent: detail}),
+      Object.assign(document.createElement('em'), {className: 'chip', textContent: chip}), spark);
+    tile.style.setProperty('--i', kpiCount++);
+    return tile;
+  };
+  let kpiCount = 0;
+  const lastWeek = Array.from({length: 7}, (_, i) => now - (6 - i) * dayMs).map(t => nodes.filter(n => dayKey(touched(n)) === dayKey(t)).length);
+  const added = nodes.filter(n => { const t = Date.parse(n.created); return Number.isFinite(t) && t >= weekAgo; }).length;
+  get('home-kpis').replaceChildren(
+    kpi(nodes.length, 'Pages', `in ${clusters.length} groups`, added ? `+${added} new` : `${clusters.length} groups`,
+      perGroup(name => nodes.filter(n => n.region === name).length), 'var(--c-pages)', 'Pages per group'),
+    kpi(ideas.length, 'Ideas', 'sections across all pages', `${(ideas.length / Math.max(1, nodes.length)).toFixed(1)} / page`,
+      perGroup(name => ideas.filter(idea => nodes[idea.page].region === name).length), 'var(--c-ideas)', 'Ideas per group'),
+    kpi(edges.length, 'Links', 'between pages', `${(2 * edges.length / Math.max(1, nodes.length)).toFixed(1)} / page`,
+      perGroup(name => edges.filter(([a, b]) => nodes[a].region === name || nodes[b].region === name).length), 'var(--c-links)', 'Links touching each group'),
+    kpi(fresh, 'Updated this week', 'pages changed in 7 days', `${Math.round(100 * fresh / Math.max(1, nodes.length))}%`,
+      lastWeek, 'var(--c-updates)', 'Pages updated per day, last 7 days'));
+
+  // Pages updated per day, last 30 days: one series, columns anchored to the baseline.
+  const days = Array.from({length: 30}, (_, i) => now - (29 - i) * dayMs);
+  const counts = days.map(t => nodes.filter(n => dayKey(touched(n)) === dayKey(t)).length);
+  const box = get('chart-activity');
+  const width = Math.max(240, box.clientWidth), height = 210, left = 22, bottom = 18, top = 6;
+  const max = Math.max(2, ...counts), step = Math.ceil(max / 2);
+  const ceiling = step * 2, plotW = width - left, plotH = height - bottom - top;
+  const gap = 2, barW = (plotW - gap * 29) / 30;
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', `Pages updated per day over the last 30 days; ${counts.reduce((a, b) => a + b, 0)} updates in total, most in one day ${max}.`);
+  const el = (name, attrs, text, parent = svg) => { const e = document.createElementNS(svgNS, name); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text != null) e.textContent = text; parent.append(e); return e; };
+  const defs = el('defs', {});
+  for (const [id, from, to] of [['bar-fill', '#c58dff', '#9a45ff'], ['bar-hover', '#dcb8ff', '#b06cff']]) {
+    const g = el('linearGradient', {id, x1: 0, y1: 0, x2: 0, y2: 1}, null, defs);
+    el('stop', {offset: '0', 'stop-color': from}, null, g);
+    el('stop', {offset: '1', 'stop-color': to}, null, g);
+  }
+  for (const tick of [0, step, ceiling]) {
+    const y = top + plotH - plotH * tick / ceiling;
+    el('line', {class: 'grid', x1: left, x2: width, y1: y, y2: y});
+    el('text', {x: 0, y: y + 3}, tick);
+  }
+  const fmt = t => new Date(t).toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+  [[0, 'start'], [15, 'middle'], [29, 'end']].forEach(([i, anchor]) =>
+    el('text', {x: left + i * (barW + gap) + (anchor === 'start' ? 0 : anchor === 'end' ? barW : barW / 2), y: height - 4, 'text-anchor': anchor}, fmt(days[i])));
+  counts.forEach((count, i) => {
+    const x = left + i * (barW + gap);
+    const hit = el('rect', {class: 'hit', x, y: top, width: barW + gap, height: plotH, fill: 'transparent'});
+    if (count) {
+      const h = Math.max(3, plotH * count / ceiling), y = top + plotH - h, r = Math.min(4, barW / 2, h);
+      el('path', {class: 'bar', style: `--j:${i}`, d: `M${x},${top + plotH}V${y + r}Q${x},${y} ${x + r},${y}H${x + barW - r}Q${x + barW},${y} ${x + barW},${y + r}V${top + plotH}Z`});
+    }
+    hit.addEventListener('pointermove', event => chartTip(event, `${count} ${count === 1 ? 'page' : 'pages'}`, fmt(days[i])));
+    hit.addEventListener('pointerleave', hideTip);
+  });
+  box.replaceChildren(svg);
+
+  // Ideas by group and most connected pages: one series each, labelled bars.
+  const barRow = (name, value, maxValue, detail, onClick) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    const track = Object.assign(document.createElement('span'), {className: 'track'});
+    track.append(Object.assign(document.createElement('span'), {className: 'fill', style: `width:${Math.max(2, 100 * value / maxValue)}%`}));
+    button.append(Object.assign(document.createElement('span'), {className: 'name', textContent: name}),
+      Object.assign(document.createElement('span'), {className: 'value', textContent: value}), track);
+    button.setAttribute('aria-label', `${name}: ${detail}`);
+    button.addEventListener('pointermove', event => chartTip(event, name, detail));
+    button.addEventListener('pointerleave', hideTip);
+    button.addEventListener('click', () => { hideTip(); onClick(); });
+    return button;
+  };
+  const groups = clusters.map(c => ({name: c.name, ideas: ideas.filter(idea => nodes[idea.page].region === c.name).length,
+    pages: nodes.filter(n => n.region === c.name).length})).sort((a, b) => b.ideas - a.ideas);
+  const topIdeas = Math.max(1, ...groups.map(g => g.ideas));
+  get('chart-groups').replaceChildren(...groups.map(g => barRow(g.name, g.ideas, topIdeas, `${g.ideas} ideas in ${g.pages} pages`,
+    () => { get('home-panel').hidden = true; focusRegion(g.name); })));
+  const connected = nodes.map((n, i) => i).sort((a, b) => nodes[b].degree - nodes[a].degree).slice(0, 6);
+  const topDegree = Math.max(1, nodes[connected[0]]?.degree || 1);
+  get('chart-connected').replaceChildren(...connected.map(i => barRow(nodes[i].title, nodes[i].degree, topDegree,
+    `${nodes[i].degree} linked pages · ${nodes[i].region}`, () => { get('home-panel').hidden = true; selectPage(i); })));
+  for (const list of ['chart-groups', 'chart-connected']) get(list).querySelectorAll('.fill').forEach((fill, j) => fill.style.setProperty('--j', j));
+}
+
+function renderHome() {
+  const q=get('home-search').value.trim().toLowerCase(), words=q.split(/\s+/);
+  const matches=q?order.filter(i=>words.every(w=>(nodes[i].title+' '+nodes[i].region+' '+searchText[i]).toLowerCase().includes(w))):[];
+  matches.sort((a,b)=>Number(nodes[b].title.toLowerCase().includes(q))-Number(nodes[a].title.toLowerCase().includes(q)));
+  get('home-results').replaceChildren(...matches.map(i=>homePageButton(i,nodes[i].region,q)));
+  get('home-feed').hidden=!!q;
+  get('home-dash').hidden=!!q;
+  hideTip();
+  if(!q)renderDashboard();
+  if(q&&!matches.length){const p=document.createElement('p');p.className='home-empty';p.textContent='No matching pages';get('home-results').append(p);}
+  const recent=recentPaths.map(path=>nodes.findIndex(n=>n.path===path)).filter(i=>i>=0);
+  get('home-recent').replaceChildren(...recent.slice(0,5).map(i=>homePageButton(i,'Opened · '+nodes[i].region)));
+  if(!recent.length){const p=document.createElement('p');p.className='home-empty';p.textContent='Pages you open will appear here.';get('home-recent').append(p);}
+  const date = value => {const n=Date.parse(value);return Number.isFinite(n)?n:0;};
+  const conversations=order.filter(i=>nodes[i].category==='Chat record').sort((a,b)=>date(nodes[b].created)-date(nodes[a].created)||nodes[a].title.localeCompare(nodes[b].title));
+  get('home-conversations').replaceChildren(...conversations.slice(0,6).map(i=>homePageButton(i,nodes[i].created?'Summary created '+nodes[i].created:'Creation date unavailable')));
+  if(!conversations.length){const p=document.createElement('p');p.className='home-empty';p.textContent='No conversation summaries yet.';get('home-conversations').append(p);}
+}
+
+function openHome() {
+  selectPage(null);focusRegion(null);
+  const destination={...defaultView,zoom:1.23};
+  if(reducedMotion.matches)Object.assign(view,destination);
+  else cameraMove={start:performance.now(),fraction:0,origin:{...view,center:[...view.center]},destination,startVisibility:new Map(clusters.map(c=>[c.name,regionOpacity(c.name)])),startHubs:hubOpacity()};
+  const panel=get('home-panel');panel.classList.remove('intro');void panel.offsetWidth;
+  if(!reducedMotion.matches){panel.classList.add('intro');clearTimeout(openHome.timer);openHome.timer=setTimeout(()=>panel.classList.remove('intro'),1800);}
+  panel.hidden=false;renderHome();get('home-search').focus();draw();
+}
+get('home-core').addEventListener('click',openHome);
+get('home-nav').addEventListener('click',openHome);
+get('close-home').addEventListener('click',()=>{get('home-panel').hidden=true;get('home-nav').focus();get('reset').click();});
+get('home-search').addEventListener('input',renderHome);
+new ResizeObserver(()=>{if(!get('home-panel').hidden&&!get('home-dash').hidden)renderDashboard();}).observe(get('home-dash'));
+
+
+const hubs = clusters.map(cluster => {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'hub';
+  const dot = document.createElement('span');
+  dot.className = 'hub-dot';
+  dot.setAttribute('aria-hidden', 'true');
+  dot.style.scale = '1.2';
+  const label = document.createElement('span');
+  label.className = 'hub-name';
+  const fresh = nodes.filter((node, i) => node.region === cluster.name && isNew[i]).length;
+  label.textContent = cluster.name;
+  const amount = ideas.filter(idea => nodes[idea.page].region === cluster.name).length;
+  const countLabel = Object.assign(document.createElement('span'), {className: 'hub-count',
+    textContent: amount ? `${amount} ideas` : `${nodes.filter(n => n.region === cluster.name).length} pages`});
+  button.append(dot, label, countLabel);
+  button.addEventListener('click', () => {
+    selectPage(null);
+    focusRegion(cluster.name);
+    get('overview').focus({preventScroll: true});
+  });
+  get('hubs').append(button);
+  return {button, cluster};
+});
+
+function focusRegion(name) {
+  if(name!==null)get('home-panel').hidden=true;
+  if (region === name) return;
+  const startVisibility = new Map(clusters.map(cluster => [cluster.name, regionOpacity(cluster.name)]));
+  const startHubs = hubOpacity();
+  region = name;
+  hovered = null;
+  hoveredIdea = null;
+  get('brand-block').hidden = name !== null;
+  get('overview').hidden = name === null;
+  get('overview').textContent = name === null ? '← Overview' : '← ' + name;
+  get('overview').setAttribute('aria-label', 'Return to overview');
+  const destination = name === null ? defaultView : {
+    center: spinPos(regions[name].center),
+    zoom: Math.min(3.25, 0.9 / regions[name].extent),
+  };
+  cameraMove = null;
+  if (reducedMotion.matches) {
+    Object.assign(view, destination);
+  } else {
+    const targetView = {...view, ...destination};
+    for (const angle of ['yaw', 'pitch']) {
+      const delta = targetView[angle] - view[angle];
+      targetView[angle] = view[angle] + Math.atan2(Math.sin(delta), Math.cos(delta));
+    }
+    cameraMove = {
+      start: performance.now(),
+      fraction: 0,
+      origin: {...view},
+      destination: targetView,
+      startVisibility,
+      startHubs,
+    };
+  }
+  draw();
+}
+
+get('overview').addEventListener('click', () => {
+  const previous = region;
+  selectPage(null);
+  focusRegion(null);
+  if (cameraMove) {
+    get('browse').focus({preventScroll: true});
+  } else {
+    hubs.find(hub => hub.cluster.name === previous)?.button.focus({preventScroll: true});
+  }
+});
+
+function randomSource(seed) {
+  return () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+}
+
+function glowSprite(color) {
+  const sprite = document.createElement('canvas');
+  sprite.width = sprite.height = 24;
+  const brush = sprite.getContext('2d');
+  const gradient = brush.createRadialGradient(12, 12, 0, 12, 12, 12);
+  gradient.addColorStop(0, color + 'aa');
+  gradient.addColorStop(0.28, color + '70');
+  gradient.addColorStop(0.58, color + '25');
+  gradient.addColorStop(1, color + '00');
+  brush.fillStyle = gradient;
+  brush.fillRect(0, 0, 24, 24);
+  return sprite;
+}
+
+function orbSprite(color) {
+  const sprite = document.createElement('canvas');
+  sprite.width = sprite.height = 64;
+  const brush = sprite.getContext('2d');
+  const body = brush.createRadialGradient(23, 21, 2, 32, 32, 29);
+  body.addColorStop(0, '#ffffff');
+  body.addColorStop(0.14, '#ffffff');
+  body.addColorStop(0.38, color);
+  body.addColorStop(0.80, color + 'a8');
+  body.addColorStop(1, '#242424');
+  brush.beginPath();
+  brush.arc(32, 32, 29, 0, Math.PI * 2);
+  brush.fillStyle = body;
+  brush.fill();
+  brush.strokeStyle = color;
+  brush.lineWidth = 1.4;
+  brush.stroke();
+  return sprite;
+}
+
+function glowWave(distance, phase) {
+  return Math.max(0, Math.cos(distance * 3.1 - glowTime * 0.86 + phase)) ** 12;
+}
+
+function project(position, camera) {
+  const x = position[0] - view.center[0];
+  const y = position[1] - view.center[1];
+  const z = position[2] - view.center[2];
+  const {cy, sy, cp, sp, width, height} = camera;
+  const rx = x * cy - z * sy;
+  const rz = x * sy + z * cy;
+  const ry = y * cp - rz * sp;
+  const depth = y * sp + rz * cp;
+  const perspective = 3.4 / (3.4 - depth);
+  const scale = Math.min(width, height) * 0.46 * view.zoom * perspective;
+  return {x: width / 2 + rx * scale, y: height / 2 + ry * scale, depth,
+          perspective};
+}
+
+function smoothRange(value, start, end) {
+  const t = Math.min(1, Math.max(0, (value - start) / (end - start)));
+  return t * t * (3 - 2 * t);
+}
+
+function regionOpacity(name) {
+  const target = !region || name === region ? 1 : 0;
+  if (!cameraMove) return target;
+  const fade = smoothRange(cameraMove.fraction, 0.12, 0.82);
+  const origin = cameraMove.startVisibility.get(name);
+  return origin + (target - origin) * fade;
+}
+
+function hubOpacity() {
+  const target = region ? 0 : 1;
+  if (!cameraMove) return target;
+  const fade = region
+    ? smoothRange(cameraMove.fraction, 0.05, 0.36)
+    : smoothRange(cameraMove.fraction, 0.60, 0.96);
+  return cameraMove.startHubs + (target - cameraMove.startHubs) * fade;
+}
+
+function draw() {
+  const {width, height} = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const pxWidth = Math.round(width * dpr), pxHeight = Math.round(height * dpr);
+  if (canvas.width !== pxWidth || canvas.height !== pxHeight) {
+    canvas.width = pxWidth;
+    canvas.height = pxHeight;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const camera = {width, height, cy: Math.cos(view.yaw), sy: Math.sin(view.yaw),
+                  cp: Math.cos(view.pitch), sp: Math.sin(view.pitch)};
+  get('sky').hidden = !skyRenderer?.(camera);
+  if (signalCanvas.width !== pxWidth || signalCanvas.height !== pxHeight) {
+    signalCanvas.width = pxWidth;
+    signalCanvas.height = pxHeight;
+    signalCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  const points = nodes.map((node, i) => {
+    const point = projectPagePosition(i, camera);
+    return {...point, i, radius: (4 + Math.sqrt(node.degree) * .8) * point.perspective};
+  });
+  const ideaPoints = ideas.map((idea, n) => ({...project(ideaWorldPosition(n), camera), n, i: idea.page}));
+  const visibility = new Map(clusters.map(cluster => [cluster.name, regionOpacity(cluster.name)]));
+  liveCamera = camera;
+  liveVisibility = visibility;
+  const lensLayer = lensRenderer?.(camera, visibility, nodes[selected]?.region);
+  get('hubs').classList.remove('lensed');
+  const home=project([0,0,0],camera);
+  const core=get('home-core');
+  const size=Math.max(44,2*lensRadius*Math.min(width,height)*.46*view.zoom*home.perspective);
+  core.style.left=home.x+'px';core.style.top=home.y+'px';core.style.width=size+'px';core.style.height=size+'px';
+  core.hidden=!!region||!!cameraMove||!get('home-panel').hidden;
+  drawParticles(camera, visibility, !!lensLayer);
+
+  const adjacent = new Set(neighbors[selected] || []);
+  const focusOf = i => selected === null ? 1 : i === selected ? 1 : adjacent.has(i) ? .7 : .32;
+  // Spokes from each page to its ideas: the thin star shapes.
+  for (const cluster of clusters) {
+    const opacity = visibility.get(cluster.name);
+    if (!opacity) continue;
+    const quiet = new Path2D(), lit = new Path2D();
+    for (const p of ideaPoints) {
+      if (nodes[p.i].region !== cluster.name) continue;
+      const from = points[p.i], path = p.i === selected || p.i === hovered ? lit : quiet;
+      path.moveTo(from.x, from.y);
+      path.lineTo(p.x, p.y);
+    }
+    ctx.lineWidth = .6;
+    ctx.strokeStyle = '#d4d4d4';
+    ctx.globalAlpha = opacity * (selected === null ? .17 : .07);
+    ctx.stroke(quiet);
+    ctx.lineWidth = .9;
+    ctx.strokeStyle = '#ffffff';
+    ctx.globalAlpha = opacity * .6;
+    ctx.stroke(lit);
+  }
+  // Links between pages.
+  for (const [a, b] of edges) {
+    const opacity = Math.min(visibility.get(nodes[a].region), visibility.get(nodes[b].region));
+    if (opacity === 0) continue;
+    const active = a === selected || b === selected;
+    ctx.beginPath();
+    ctx.moveTo(points[a].x, points[a].y);
+    ctx.lineTo(points[b].x, points[b].y);
+    ctx.strokeStyle = active ? '#ffffff' : '#bdbdbd';
+    ctx.globalAlpha = opacity * (active ? .62 : selected === null ? .075 : .035);
+    ctx.lineWidth = active ? 1.1 : .55;
+    ctx.stroke();
+  }
+
+  drawMotion(camera, points, ideaPoints, visibility);
+  // The GPU surface is visible directly. Keep page markers and labels crisp
+  // on this separate overlay, without copying GPU pixels into Canvas each frame.
+  if (lensLayer) maskShadows(ctx, camera, visibility);
+
+  projected = points.filter(p => !region || nodes[p.i].region === region).sort((a,b) => a.depth-b.depth);
+  projectedIdeas = ideaPoints.filter(p => !region || nodes[p.i].region === region);
+  const reveal = cameraMove ? smoothRange(cameraMove.fraction, 0.57, 0.97) : 1;
+  const sizeBoost = Math.sqrt(Math.sqrt(view.zoom));
+  if (reveal > 0) {
+    // Ideas: tiny white points, batched into four brightness bands.
+    const bands = Array.from({length: 4}, () => new Path2D());
+    for (const p of projectedIdeas) {
+      if (p.n === hoveredIdea) continue;
+      const r = Math.max(.55, .95 * Math.sqrt(p.perspective) * sizeBoost);
+      const twinkle = .5 + .5 * Math.sin(glowTime * (.55 + (p.n % 7) * .1) + p.n);
+      const band = (focusOf(p.i) > .5 ? 2 : 0) + (twinkle > .55 ? 1 : 0);
+      bands[band].moveTo(p.x + r, p.y);
+      bands[band].arc(p.x, p.y, r, 0, Math.PI * 2);
+    }
+    ctx.fillStyle = '#ffffff';
+    bands.forEach((path, b) => { ctx.globalAlpha = reveal * [.22, .38, .62, .9][b]; ctx.fill(path); });
+    // Pages: slightly larger stars with a soft glow.
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of projected) {
+      const active = p.i === selected || p.i === hovered;
+      const o = reveal * focusOf(p.i);
+      const coreSize = (active ? 2.5 : 1.55) * Math.sqrt(p.perspective) * sizeBoost;
+      const reach = coreSize * (active ? 7 : 5.5);
+      ctx.globalAlpha = o * .5;
+      ctx.drawImage(whiteGlow, p.x - reach, p.y - reach, reach * 2, reach * 2);
+      ctx.globalAlpha = o;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, coreSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    drawDebriefGlow();
+    const lit = hoveredIdea === null ? null : projectedIdeas.find(q => q.n === hoveredIdea);
+    if (lit) {
+      ctx.globalAlpha = reveal;
+      ctx.drawImage(whiteGlow, lit.x - 13, lit.y - 13, 26, 26);
+      ctx.beginPath();
+      ctx.arc(lit.x, lit.y, 2.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  ctx.globalAlpha = 1;
+  const hubLayer = get('hubs');
+  const hubLight = hubOpacity();
+  hubLayer.hidden = hubLight === 0 || !get('home-panel').hidden;
+  hubLayer.inert = !!cameraMove || !!region;
+  hubLayer.style.opacity = hubLight;
+  if (hubLight > 0) positionHubs(camera);
+  const ideaLabel = hoveredIdea === null ? null : projectedIdeas.find(p => p.n === hoveredIdea);
+  const label = ideaLabel || projected.find(point => point.i === (hovered ?? selected));
+  if (label && !cameraMove) {
+    const font = '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif';
+    const name = ideaLabel ? ideas[hoveredIdea].title : nodes[label.i].title;
+    const sub = ideaLabel ? nodes[label.i].title : '';
+    ctx.font = '500 12px ' + font;
+    let box = ctx.measureText(name).width;
+    ctx.font = '400 11px ' + font;
+    if (sub) box = Math.max(box, ctx.measureText(sub).width);
+    box = Math.min(width - 12, box + 24);
+    const tall = sub ? 42 : 28;
+    const lift = ideaLabel ? 12 : label.radius;
+    const x = Math.min(Math.max(6, label.x - box / 2), width - box - 6);
+    const y = Math.max(4, Math.min(height - tall - 4, label.y - lift - tall - 8));
+    ctx.beginPath();
+    ctx.roundRect(x, y, box, tall, 12);
+    ctx.fillStyle = 'rgba(18, 18, 20, .86)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, .14)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#efefef';
+    ctx.font = '500 12px ' + font;
+    ctx.fillText(name, x + 12, y + 18, box - 24);
+    if (sub) {
+      ctx.fillStyle = '#9a9a9a';
+      ctx.font = '400 11px ' + font;
+      ctx.fillText(sub, x + 12, y + 33, box - 24);
+    }
+  }
+}
+
+function maskShadows(context, camera, visibility) {
+  context.save();
+  context.globalCompositeOperation = 'destination-out';
+  const p = project([0,0,0], camera);
+  context.globalAlpha=1;
+  context.beginPath();
+  context.arc(p.x,p.y,lensRadius*Math.min(camera.width,camera.height)*.46*view.zoom*p.perspective,0,Math.PI*2);
+  context.fill();
+  context.restore();
+}
+
+// Light beads on links, and comets on wide orbits around the outside.
+function drawMotion(camera, points, ideaPoints, visibility) {
+  const scale = window.devicePixelRatio || 1;
+  signalCtx.clearRect(0, 0, signalCanvas.width / scale, signalCanvas.height / scale);
+  signalCtx.globalCompositeOperation = 'lighter';
+  signalCtx.fillStyle = '#ffffff';
+  signalCtx.strokeStyle = '#ffffff';
+  for (let j = 0; j < beadCount; j++) {
+    const duration = 2.6 + 2.8 * hash(j * 3 + 1);
+    const t = glowTime / duration + hash(j * 3 + 2);
+    const cycle = Math.floor(t), f = t - cycle;
+    const link = beadLinks[Math.floor(hash(j * 7919 + cycle * 104729) * beadLinks.length)];
+    let start, end, opacity, touches;
+    if (link.spoke) {
+      opacity = visibility.get(nodes[link.page].region);
+      [start, end] = hash(j + cycle * 31) < .5 ? [points[link.page], ideaPoints[link.idea]] : [ideaPoints[link.idea], points[link.page]];
+      touches = link.page === selected;
+    } else {
+      opacity = Math.min(visibility.get(nodes[link.a].region), visibility.get(nodes[link.b].region));
+      [start, end] = hash(j + cycle * 31) < .5 ? [points[link.a], points[link.b]] : [points[link.b], points[link.a]];
+      touches = link.a === selected || link.b === selected;
+    }
+    if (!opacity) continue;
+    const alpha = opacity * Math.sin(Math.PI * f) * (selected === null || touches ? .85 : .2);
+    const x = start.x + (end.x - start.x) * f, y = start.y + (end.y - start.y) * f;
+    const back = Math.max(0, f - .08);
+    signalCtx.globalAlpha = alpha * .45;
+    signalCtx.lineWidth = .8;
+    signalCtx.beginPath();
+    signalCtx.moveTo(start.x + (end.x - start.x) * back, start.y + (end.y - start.y) * back);
+    signalCtx.lineTo(x, y);
+    signalCtx.stroke();
+    signalCtx.globalAlpha = alpha * .55;
+    signalCtx.drawImage(whiteGlow, x - 5, y - 5, 10, 10);
+    signalCtx.globalAlpha = alpha;
+    signalCtx.beginPath();
+    signalCtx.arc(x, y, .95, 0, Math.PI * 2);
+    signalCtx.fill();
+  }
+  const cometLight = hubOpacity();
+  const zone = debriefZone();
+  if (cometLight > 0) for (const comet of comets) {
+    const head = comet.phase + comet.speed * glowTime;
+    const direction = Math.sign(comet.speed), steps = 28;
+    let previous = null;
+    for (let k = 0; k <= steps; k++) {
+      const p = project(cometWorld(comet, head - direction * comet.tail * k / steps), camera);
+      if (previous) {
+        const fade = (1 - k / steps) ** 1.7;
+        signalCtx.globalAlpha = cometLight * comet.brightness * fade * .8 * zone(p.x);
+        signalCtx.lineWidth = .35 + 1.5 * fade;
+        signalCtx.beginPath();
+        signalCtx.moveTo(previous.x, previous.y);
+        signalCtx.lineTo(p.x, p.y);
+        signalCtx.stroke();
+      }
+      previous = p;
+    }
+    const h = project(cometWorld(comet, head), camera);
+    signalCtx.globalAlpha = cometLight * comet.brightness * zone(h.x);
+    signalCtx.drawImage(whiteGlow, h.x - 11, h.y - 11, 22, 22);
+    signalCtx.beginPath();
+    signalCtx.arc(h.x, h.y, 1.7, 0, Math.PI * 2);
+    signalCtx.fill();
+  }
+  signalCtx.globalAlpha = 1;
+  signalCtx.globalCompositeOperation = 'source-over';
+  if (lensRenderer && liveCamera) maskShadows(signalCtx, liveCamera, liveVisibility);
+}
+
+function drawParticles(camera, visibility, lensed) {
+  if (lensed) return;
+  const {width, height} = camera;
+  const zoomScale = Math.sqrt(view.zoom);
+  ctx.globalCompositeOperation = 'lighter';
+
+  for (const cluster of clusters) {
+    const visible = visibility.get(cluster.name);
+    if (visible === 0) continue;
+    const center = project(spinPos(cluster.center), camera);
+    const dimmed = selected !== null && nodes[selected].region !== cluster.name;
+    const radius = Math.min(width, height) * 0.29 * view.zoom * center.perspective;
+    const ambient = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, radius);
+    ambient.addColorStop(0, '#ffffff12');
+    ambient.addColorStop(0.38, '#ffffff06');
+    ambient.addColorStop(1, '#ffffff00');
+    ctx.globalAlpha = visible * (dimmed ? 0.45 : 1) * (0.70 + 0.30 * Math.sin(glowTime * 0.58 + cluster.phase) ** 2);
+    ctx.fillStyle = ambient;
+    ctx.fillRect(center.x - radius, center.y - radius, radius * 2, radius * 2);
+  }
+
+  if (!lensed) for (const cluster of clusters) {
+    const visible = visibility.get(cluster.name);
+    if (visible === 0) continue;
+    const dimmed = selected !== null && nodes[selected].region !== cluster.name;
+    const opacity = visible * (dimmed ? 0.44 : 1);
+    const cores = Array.from({length: 5}, () => new Path2D());
+    const highlights = new Path2D();
+    for (const particle of cluster.particles) {
+      const {x, y, perspective} = project(particle.position, camera);
+      const radius = Math.max(0.65, particle.size * perspective * zoomScale);
+      const wave = glowWave(particle.distance, cluster.phase);
+      const halo = radius * (2.8 + wave * 3.5);
+      if (x < -halo || x > width + halo || y < -halo || y > height + halo) continue;
+      ctx.globalAlpha = opacity * (0.20 + wave * 0.75);
+      ctx.drawImage(cluster.sprite, x - halo, y - halo, halo * 2, halo * 2);
+
+      const core = cores[Math.min(4, Math.floor((particle.intensity * 0.55 + wave * 0.45) * 5))];
+      core.moveTo(x + radius, y);
+      core.arc(x, y, radius, 0, 2 * Math.PI);
+      if (radius > 1.25) {
+        const hx = x - radius * 0.25, hy = y - radius * 0.3;
+        highlights.moveTo(hx + radius * 0.30, hy);
+        highlights.arc(hx, hy, radius * 0.30, 0, 2 * Math.PI);
+      }
+    }
+    ctx.fillStyle = '#ffffff';
+    cores.forEach((core, i) => {
+      ctx.globalAlpha = opacity * Math.min(1, 0.53 + i * 0.15);
+      ctx.fill(core);
+    });
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = opacity * 0.75;
+    ctx.fill(highlights);
+  }
+
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function queueDraw() {
+  if (pendingFrame) return;
+  pendingFrame = true;
+  requestAnimationFrame(() => {
+    pendingFrame = false;
+    draw();
+  });
+}
+
+function positionHubs(camera) {
+  for (const {button, cluster} of hubs) {
+    const point = project(spinPos(cluster.center), camera);
+    button.style.left = Math.min(camera.width - 60, Math.max(60, point.x)) + 'px';
+    button.style.top = Math.min(camera.height - 70, Math.max(70, point.y)) + 'px';
+    button.style.zIndex = Math.round(point.depth * 100 + 100);
+    const radius = lensRadius * Math.min(camera.width, camera.height) * 0.46 * view.zoom * point.perspective;
+    const hitSize = Math.max(44, radius * 2);
+    button.style.setProperty('--shadow-size', 2 * radius + 'px');
+    button.style.setProperty('--hub-hit', hitSize + 'px');
+    button.style.setProperty('--hub-label-y', Math.max(41, hitSize / 2 + radius + 7) + 'px');
+  }
+}
+
+function selectPage(index) {
+  selected = index;
+  hovered = null;
+  hoveredIdea = null;
+  menu.value = index === null ? '' : String(index);
+  get('detail').hidden = index === null;
+  get('panel').classList.toggle('reading', index !== null);
+  document.body.classList.toggle('reading', index !== null);
+  setPanelOpen(index !== null);
+  if (index !== null) {
+    rememberPage(index);
+    const node = nodes[index];
+    focusRegion(node.region);
+    get('category').textContent = node.category;
+    get('title').textContent = node.title;
+    get('path').textContent = node.path;
+    get('open-page').href = node.url;
+    get('meta').textContent = `${node.status === 'superseded' ? 'Superseded · ' : ''}Updated ${node.updated}`;
+    get('page-body').innerHTML = node.html;  // built and escaped by wiki_markdown.py
+    get('page-body').scrollTop = 0;
+    get('panel').scrollTop = 0;
+    get('connections').textContent = `${node.degree} connected ${node.degree === 1 ? 'page' : 'pages'}`;
+    get('neighbors').replaceChildren(...order.filter(i => neighbors[index].includes(i)).map(i => {
+      const item = document.createElement('li');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = nodes[i].title;
+      button.addEventListener('click', () => {
+        selectPage(i);
+        menu.focus();
+      });
+      item.append(button);
+      return item;
+    }));
+  }
+  draw();
+}
+
+function setPanelOpen(open) {
+  get('panel').hidden = !open;
+  get('browse').setAttribute('aria-expanded', String(open));
+}
+get('browse').addEventListener('click', () => {
+  get('home-panel').hidden=true;
+  setPanelOpen(get('panel').hidden);
+  if (!get('panel').hidden) menu.focus();
+});
+function closePanel() {
+  selectPage(null);
+  get('browse').focus();
+}
+get('close-panel').addEventListener('click', closePanel);
+get('page-body').addEventListener('click', event => {
+  const jump = event.target.closest('a[data-page]');
+  if (!jump) return;
+  event.preventDefault();
+  selectPage(Number(jump.dataset.page));
+});
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  if(!get('home-panel').hidden){get('close-home').click();return;}
+  if (!get('panel').hidden) closePanel();
+  else if (region) get('overview').click();
+});
+get('fullscreen').hidden = !document.fullscreenEnabled;
+get('fullscreen').addEventListener('click', async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch {
+    get('fullscreen').hidden = true;
+  }
+});
+document.addEventListener('fullscreenchange', () => {
+  const label = document.fullscreenElement ? 'Exit full screen' : 'Enter full screen';
+  get('fullscreen').setAttribute('aria-label', label);
+  get('fullscreen').title = label;
+});
+
+function pick(event) {
+  if (cameraMove) return null;
+  const rect = canvas.getBoundingClientRect();
+  const x = event.clientX - rect.left, y = event.clientY - rect.top;
+  let best = null;
+  for (const p of projected) {
+    const d = Math.hypot(p.x - x, p.y - y);
+    if (d <= p.radius + 4 && (!best || d < best.d)) best = {d, page: p.i, idea: null};
+  }
+  for (const p of projectedIdeas) {
+    const d = Math.hypot(p.x - x, p.y - y);
+    if (d <= 6 && (!best || d < best.d - 1)) best = {d, page: p.i, idea: p.n};
+  }
+  return best;
+}
+// Open the idea's page and scroll the reader to that section.
+function showIdea(n) {
+  const heading = get('page-body').querySelector('#idea-' + ideas[n].k);
+  if (!heading) return;
+  get('panel').scrollTop = Math.max(0, heading.offsetTop - 20);
+  heading.classList.add('idea-focus');
+  setTimeout(() => heading.classList.remove('idea-focus'), 2400);
+}
+function zoom(factor) {
+  if (cameraMove) return;
+  debrief.zoomTo = null;
+  view.zoom = Math.max(0.55, Math.min(3.25, view.zoom * factor));
+  draw();
+}
+
+canvas.addEventListener('pointerdown', event => {
+  if (cameraMove || drag || event.button !== 0) return;
+  drag = {id: event.pointerId, x: event.clientX, y: event.clientY, moved: false, hit: pick(event)};
+  canvas.setPointerCapture(event.pointerId);
+});
+canvas.addEventListener('pointermove', event => {
+  if (drag) {
+    if (event.pointerId !== drag.id) return;
+    const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+    view.yaw += dx * 0.008;
+    view.pitch += dy * 0.008;
+    Object.assign(drag, {x: event.clientX, y: event.clientY, moved: true});
+    hovered = null;
+    hoveredIdea = null;
+    canvas.classList.add('dragging');
+  } else {
+    const hit = pick(event);
+    hovered = hit?.page ?? null;
+    hoveredIdea = hit?.idea ?? null;
+  }
+  queueDraw();
+});
+function endDrag(event) {
+  if (drag?.id !== event.pointerId) return;
+  const clicked = event.type === 'pointerup' && !drag.moved;
+  const hit = drag.hit;
+  drag = null;
+  canvas.classList.remove('dragging');
+  if (clicked) {
+    selectPage(hit?.page ?? null);
+    if (hit?.idea != null) showIdea(hit.idea);
+  }
+}
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('lostpointercapture', endDrag);
+canvas.addEventListener('pointerleave', () => { hovered = null; hoveredIdea = null; draw(); });
+canvas.addEventListener('wheel', event => {
+  event.preventDefault();
+  dismissDebrief();
+  zoom(Math.exp(-Math.max(-180, Math.min(180, event.deltaY)) * 0.0025));
+}, {passive: false});
+menu.addEventListener('change', () => selectPage(menu.value === '' ? null : Number(menu.value)));
+get('zoom-in').addEventListener('click', () => zoom(1.2));
+get('zoom-out').addEventListener('click', () => zoom(1 / 1.2));
+get('reset').addEventListener('click', () => {
+  get('home-panel').hidden=true;
+  if (region) {
+    get('overview').click();
+  } else {
+    cameraMove = null;
+    Object.assign(view, defaultView);
+    draw();
+  }
+});
+function updateMotionButton() {
+  const label = glowEnabled ? 'Pause animation' : 'Resume animation';
+  get('motion').textContent = glowEnabled ? 'Ⅱ' : '▷';
+  get('motion').title = label;
+  get('motion').setAttribute('aria-label', label);
+  get('motion').setAttribute('aria-pressed', String(glowEnabled));
+}
+get('motion').addEventListener('click', () => {
+  glowEnabled = !glowEnabled;
+  lastTick = null;
+  updateMotionButton();
+});
+reducedMotion.addEventListener('change', event => {
+  glowEnabled = !event.matches;
+  lastTick = null;
+  updateMotionButton();
+});
+let mapVisible = true;
+new IntersectionObserver(entries => {
+  mapVisible = entries[0].isIntersecting;
+  lastTick = null;
+}).observe(canvas);
+
+const fpsMeter = {frames: 0, since: null};
+function countFrame(now) {
+  fpsMeter.frames++;
+  fpsMeter.since ??= now;
+  if (now - fpsMeter.since < 500) return;
+  const fps = Math.round(fpsMeter.frames * 1000 / (now - fpsMeter.since));
+  const label = get('fps');
+  label.textContent = `${fps} fps`;
+  label.classList.toggle('slow', fps < 45);
+  fpsMeter.frames = 0; fpsMeter.since = now;
+}
+function animate(now) {
+  countFrame(now);
+  if (debrief.zoomTo !== null) {
+    if (cameraMove || region || selected !== null || drag) debrief.zoomTo = null;
+    else {
+      view.zoom += (debrief.zoomTo - view.zoom) * .08;
+      if (Math.abs(debrief.zoomTo - view.zoom) < .001) { view.zoom = debrief.zoomTo; debrief.zoomTo = null; }
+      queueDraw();
+    }
+  }
+  if (cameraMove) {
+    const {start, origin, destination} = cameraMove;
+    const fraction = Math.max(0, Math.min(1, (now - start) / cameraDuration));
+    cameraMove.fraction = fraction;
+    const eased = fraction ** 3 * (10 - 15 * fraction + 6 * fraction ** 2);
+    const mix = (from, to) => from + (to - from) * eased;
+    view.center = origin.center.map((value, axis) => mix(value, destination.center[axis]));
+    view.zoom = mix(origin.zoom, destination.zoom);
+    view.yaw = mix(origin.yaw, destination.yaw);
+    view.pitch = mix(origin.pitch, destination.pitch);
+    if (fraction === 1) cameraMove = null;
+    queueDraw();
+  }
+  if (glowEnabled && !document.hidden && mapVisible) {
+    if (lastTick === null) lastTick = now;
+    const step = Math.max(0, Math.min(0.1, (now - lastTick) / 1000));
+    glowTime += step;
+    if (!region && selected === null && !drag && !cameraMove && get('home-panel').hidden && !debrief.fly) spin += step * .035;
+    lastTick = now;
+    // One frame rebuilds moving page positions, hit targets, connection
+    // endpoints, sky, and plasma with the same time value.
+    if (!pendingFrame) draw();
+  } else {
+    lastTick = null;
+    lastStarDraw = null;
+  }
+  requestAnimationFrame(animate);
+}
+// ---- Opening debrief: what changed since the last visit, written on the left ----
+// The main process gathers the changes and streams the summary; this side only shows it.
+const debrief = {active: false, changed: new Set(), hover: new Set(), fly: null, zoomTo: null, right: 0,
+  text: '', used: 0, done: false, sentence: null, sentenceText: '', timer: null, meta: null};
+const goldGlow = glowSprite('#e7b85a');
+const debriefStop = new Set(['about', 'after', 'their', 'there', 'which', 'second', 'brain', 'notes', 'record', 'summary']);
+// Pages a sentence talks about: exact titles, then changed pages by their distinctive words, then group names.
+function pagesInSentence(sentence) {
+  const text = sentence.toLowerCase(), found = new Set();
+  nodes.forEach((node, i) => { const title = node.title.toLowerCase(); if (title.length >= 4 && text.includes(title)) found.add(i); });
+  for (const i of debrief.changed) {
+    if (found.has(i)) continue;
+    const words = (nodes[i].title.toLowerCase().match(/[a-z0-9]{5,}/g) || []).filter(w => !debriefStop.has(w));
+    if (words.length && words.filter(w => text.includes(w)).length >= Math.min(2, words.length)) found.add(i);
+  }
+  for (const name of groupNames) if (text.includes(name.toLowerCase())) for (const i of debrief.changed) if (nodes[i].region === name) found.add(i);
+  return [...found];
+}
+// Where the map must sit so no page or idea orb is under the text: try every turn of the
+// slow spin, find how far left and right the disc reaches, then slide (and if needed shrink) it.
+function debriefFit() {
+  const column = get('debrief').getBoundingClientRect(), right = column.right + 28;
+  const box = canvas.getBoundingClientRect(), base = Math.min(box.width, box.height) * .46, W = innerWidth;
+  const cy = Math.cos(defaultView.yaw), sy = Math.sin(defaultView.yaw), cp = Math.cos(defaultView.pitch), sp = Math.sin(defaultView.pitch);
+  const points = [...pageOrbits, ...ideas.map((idea, n) => pageOrbits[idea.page].map((v, a) => v + ideaOffsets[n][a]))];
+  let lo = 0, hi = 0;
+  for (let k = 0; k < 48; k++) {
+    const c = Math.cos(k / 48 * 2 * Math.PI), s = Math.sin(k / 48 * 2 * Math.PI);
+    for (const p of points) {
+      const x = p[0] * c - p[1] * s, y = p[0] * s + p[1] * c, rx = x * cy - p[2] * sy, rz = x * sy + p[2] * cy;
+      const off = rx * 3.4 / (3.4 - (y * sp + rz * cp));
+      if (off < lo) lo = off; if (off > hi) hi = off;
+    }
+  }
+  lo -= .025; hi += .025;
+  let zoom = defaultView.zoom;
+  const room = W - 16 - right;
+  if ((hi - lo) * base * zoom > room) zoom = Math.max(.3, room / ((hi - lo) * base));
+  return {zoom, shift: Math.max(0, right - (W / 2 + lo * base * zoom)), right};
+}
+function placeDebrief() {
+  if (!debrief.active) return;
+  const fit = debriefFit();
+  debrief.right = fit.right;
+  document.documentElement.style.setProperty('--debrief-shift', fit.shift + 'px');
+  if (Math.abs(view.zoom - fit.zoom) > .001) debrief.zoomTo = fit.zoom;
+}
+addEventListener('resize', placeDebrief);
+// Comets fade out inside the text zone (and back in just to its right).
+function debriefZone() {
+  if (!debrief.active) return () => 1;
+  const left = canvas.getBoundingClientRect().left, edge = debrief.right;
+  return x => smoothRange(left + x, edge - 40, edge + 60);
+}
+// Changed pages pulse gold while the debrief shows; pages of a hovered sentence or a jump link glow brighter.
+function drawDebriefGlow() {
+  const strong = debrief.hover.size ? debrief.hover : debrief.fly;
+  if (!debrief.active && !strong) return;
+  const sizeBoost = Math.sqrt(Math.sqrt(view.zoom));
+  for (const p of projected) {
+    const bright = strong?.has(p.i), soft = debrief.active && !debrief.hover.size && debrief.changed.has(p.i);
+    if (!bright && !soft) continue;
+    const pulse = .55 + .45 * Math.sin(glowTime * 2.2 + p.i * .7);
+    const core = 1.55 * Math.sqrt(p.perspective) * sizeBoost, reach = core * (bright ? 13 : 8);
+    ctx.globalAlpha = (bright ? .95 : .55) * (bright ? 1 : pulse);
+    ctx.drawImage(goldGlow, p.x - reach, p.y - reach, reach * 2, reach * 2);
+    if (bright) {
+      ctx.fillStyle = '#ffd98c';
+      ctx.beginPath(); ctx.arc(p.x, p.y, core * 1.25, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = .55 + .3 * pulse;
+      ctx.strokeStyle = '#e7b85a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, core * 5.5, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalCompositeOperation = 'lighter';
+    }
+  }
+}
+function revealWords(container, text, delay = 55) {
+  const words = text.split(/(\s+)/).filter(Boolean);
+  let n = 0;
+  for (const part of words) {
+    if (/^\s+$/.test(part)) { container.append(part); continue; }
+    const span = Object.assign(document.createElement('span'), {className: 'w', textContent: part});
+    container.append(span);
+    const at = reducedMotion.matches ? 0 : delay * n++;
+    setTimeout(() => span.classList.add('on'), at);
+  }
+  return reducedMotion.matches ? 0 : delay * n;
+}
+function caret() {
+  let mark = get('debrief-text').querySelector('.caret');
+  if (!mark) mark = Object.assign(document.createElement('span'), {className: 'caret'});
+  mark.setAttribute('aria-hidden', 'true');
+  get('debrief-text').append(mark);
+}
+function closeSentence() {
+  const span = debrief.sentence;
+  if (!span) return;
+  const pages = pagesInSentence(debrief.sentenceText);
+  if (pages.length) span.dataset.pages = pages.join(',');
+  debrief.sentence = null; debrief.sentenceText = '';
+}
+// One word every ~45 ms, each fading in. Live text arrives in pieces; a word shows once it is complete.
+function pumpDebrief() {
+  const rest = debrief.text.slice(debrief.used);
+  const match = rest.match(/^(\s*)(\S+)(?=\s|$)/);
+  if (!match || (!debrief.done && match[0].length === rest.length)) {
+    if (debrief.done && !rest.trim()) finishDebrief();
+    return;
+  }
+  debrief.used += match[0].length;
+  const box = get('debrief-text');
+  if (!debrief.sentence) { debrief.sentence = Object.assign(document.createElement('span'), {className: 'sentence'}); box.append(debrief.sentence); }
+  else if (match[1]) debrief.sentence.append(' ');
+  const word = Object.assign(document.createElement('span'), {className: 'w', textContent: match[2]});
+  debrief.sentence.append(word);
+  debrief.sentenceText += (debrief.sentenceText ? ' ' : '') + match[2];
+  requestAnimationFrame(() => word.classList.add('on'));
+  if (/[.!?]["')\]]*$/.test(match[2])) { closeSentence(); box.append(' '); }
+  caret();
+}
+function finishDebrief() {
+  clearInterval(debrief.timer); debrief.timer = null;
+  closeSentence();
+  get('debrief-text').querySelector('.caret')?.remove();
+  for (const id of ['debrief-coming', 'debrief-links']) {
+    const el = get(id);
+    if (el.hidden) continue;
+    setTimeout(() => el.classList.add('on'), id === 'debrief-links' ? 260 : 60);
+  }
+  get('debrief').dataset.state = 'done';
+}
+function debriefMessage(message) {
+  if (!debrief.meta) return;
+  if (message.type === 'replace') {
+    debrief.text = message.text; debrief.used = 0; debrief.sentence = null; debrief.sentenceText = '';
+    get('debrief-text').replaceChildren(); caret();
+  } else if (message.type === 'text') debrief.text += message.text;
+  else if (message.type === 'done') { debrief.done = true; get('debrief').dataset.mode = message.mode; }
+}
+function flyToPages(list) {
+  dismissDebrief();
+  if (!list.length) return;
+  debrief.fly = new Set(list);
+  if (list.length === 1) { selectPage(list[0]); return; }
+  const groups = new Set(list.map(i => nodes[i].region));
+  if (groups.size === 1) { focusRegion([...groups][0]); return; }
+  selectPage(null);
+  const spots = list.map(i => pageWorldPosition(i));
+  const center = [0, 1, 2].map(a => spots.reduce((sum, p) => sum + p[a], 0) / spots.length);
+  const extent = Math.max(.18, ...spots.map(p => Math.hypot(...p.map((v, a) => v - center[a]))));
+  const destination = {...view, center, zoom: Math.max(.86, Math.min(3.25, .8 / extent))};
+  if (reducedMotion.matches) Object.assign(view, destination);
+  else cameraMove = {start: performance.now(), fraction: 0, origin: {...view, center: [...view.center]}, destination,
+    startVisibility: new Map(clusters.map(c => [c.name, regionOpacity(c.name)])), startHubs: hubOpacity()};
+  draw();
+}
+function dismissDebrief() {
+  if (!debrief.active) return;
+  debrief.active = false;
+  setDebriefHover([]);
+  document.body.classList.remove('debriefing');
+  get('debrief').classList.add('leaving');
+  if (Math.abs(view.zoom - defaultView.zoom) > .001 && !region && selected === null) debrief.zoomTo = defaultView.zoom;
+  clearTimeout(debrief.hideTimer);
+  debrief.hideTimer = setTimeout(() => { get('debrief').hidden = true; clearInterval(debrief.timer); }, 650);
+  draw();
+}
+document.addEventListener('pointerdown', event => {
+  if (debrief.fly && !event.target.closest('#debrief-links')) { debrief.fly = null; queueDraw(); }
+  if (debrief.active && !event.target.closest('#debrief-links button')) dismissDebrief();
+}, true);
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  if (debrief.active) { event.stopImmediatePropagation(); dismissDebrief(); }
+  else if (debrief.fly) { debrief.fly = null; queueDraw(); }
+}, true);
+function setDebriefHover(list) {
+  const next = new Set(list);
+  if ([...next].join() === [...debrief.hover].join()) return;
+  debrief.hover = next;
+  hovered = next.size === 1 ? [...next][0] : null;
+  queueDraw();
+}
+get('debrief-text').addEventListener('pointerover', event => {
+  const span = event.target.closest('.sentence[data-pages]');
+  setDebriefHover(span ? span.dataset.pages.split(',').map(Number) : []);
+});
+get('debrief-text').addEventListener('pointerleave', () => setDebriefHover([]));
+// Turn the camera back to the opening view (sized to fit beside the text), e.g. for a replay.
+function settleViewForDebrief() {
+  const fit = debriefFit();
+  debrief.right = fit.right;
+  document.documentElement.style.setProperty('--debrief-shift', fit.shift + 'px');
+  const near = (from, to) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from));
+  const destination = {yaw: near(view.yaw, defaultView.yaw), pitch: near(view.pitch, defaultView.pitch), center: [0, 0, 0], zoom: fit.zoom};
+  const settled = Math.abs(view.yaw - destination.yaw) < .001 && Math.abs(view.pitch - destination.pitch) < .001
+    && view.center.every(v => Math.abs(v) < .001) && Math.abs(view.zoom - destination.zoom) < .001;
+  if (settled) return;
+  if (reducedMotion.matches) { cameraMove = null; Object.assign(view, destination); return; }
+  if (cameraMove) { cameraMove.destination = destination; return; }
+  cameraMove = {start: performance.now(), fraction: 0, origin: {...view, center: [...view.center]}, destination,
+    startVisibility: new Map(clusters.map(c => [c.name, regionOpacity(c.name)])), startHubs: hubOpacity()};
+}
+function showDebrief(meta, replay = false) {
+  clearTimeout(debrief.hideTimer); clearInterval(debrief.timer);
+  Object.assign(debrief, {meta, text: '', used: 0, done: false, sentence: null, sentenceText: '', timer: null, fly: null});
+  setDebriefHover([]);
+  debrief.changed = new Set((meta.changed || []).map(p => nodes.findIndex(n => n.id === p.id)).filter(i => i >= 0));
+  const section = get('debrief');
+  section.hidden = false;
+  section.classList.remove('leaving');
+  section.dataset.state = 'writing';
+  section.dataset.mode = '';
+  section.scrollTop = 0;
+  get('debrief-greeting').replaceChildren();
+  get('debrief-text').replaceChildren();
+  get('debrief-since').classList.remove('on');
+  for (const id of ['debrief-coming', 'debrief-links']) get(id).classList.remove('on');
+  get('debrief-greeting').setAttribute('aria-label', meta.greeting);
+  const greetingTime = revealWords(get('debrief-greeting'), meta.greeting, 70);
+  get('debrief-since').textContent = meta.since;
+  const upcoming = meta.upcoming || [];
+  get('debrief-coming').hidden = !upcoming.length;
+  get('debrief-upcoming').replaceChildren(...upcoming.map(item => {
+    const li = document.createElement('li');
+    li.append(Object.assign(document.createElement('b'), {textContent: item.date}), Object.assign(document.createElement('span'), {textContent: item.text}));
+    return li;
+  }));
+  const links = (meta.links || []).map(link => ({...link, pages: link.ids.map(id => nodes.findIndex(n => n.id === id)).filter(i => i >= 0)})).filter(l => l.pages.length);
+  get('debrief-links').hidden = !links.length;
+  get('debrief-links').replaceChildren(...links.map(link => {
+    const button = Object.assign(document.createElement('button'), {type: 'button', textContent: link.label + ' →'});
+    button.addEventListener('mouseenter', () => setDebriefHover(link.pages));
+    button.addEventListener('mouseleave', () => setDebriefHover([]));
+    button.addEventListener('click', () => flyToPages(link.pages));
+    return button;
+  }));
+  debrief.active = true;
+  document.body.classList.add('debriefing');
+  if (replay) settleViewForDebrief(); else placeDebrief();
+  draw();
+  setTimeout(() => get('debrief-since').classList.add('on'), greetingTime + 120);
+  setTimeout(() => {
+    if (!debrief.active || debrief.meta !== meta) return;
+    caret();
+    debrief.timer = setInterval(pumpDebrief, reducedMotion.matches ? 4 : 45);
+  }, greetingTime + 380);
+}
+const debriefEarly = [];
+async function startDebrief() {
+  const api = window.secondBrain;
+  if (!api?.startDebrief || !api.onDebrief) return;
+  api.onDebrief(message => debrief.meta ? debriefMessage(message) : debriefEarly.push(message));
+  api.onDebriefReplay?.(replayDebrief);
+  let meta;
+  try { meta = await api.startDebrief(storedVisit || null); } catch (error) { console.error('Debrief unavailable', error); return; }
+  if (!meta?.show || selected !== null || region || !get('home-panel').hidden) return;
+  showDebrief(meta);
+  debriefEarly.splice(0).forEach(debriefMessage);
+}
+// ⌘D (View → Show Debrief Again): closes whatever is open and shows the latest debrief again.
+async function replayDebrief() {
+  const api = window.secondBrain;
+  if (!api?.replayDebrief) return;
+  debrief.meta = null; debriefEarly.length = 0;
+  let meta;
+  try { meta = await api.replayDebrief(); } catch (error) { console.error('Debrief replay unavailable', error); return; }
+  if (!meta?.show) return;
+  get('home-panel').hidden = true;
+  hideTip();
+  if (selected !== null) selectPage(null);
+  if (region) focusRegion(null);
+  showDebrief(meta, true);
+  debriefEarly.splice(0).forEach(debriefMessage);
+}
+
+new ResizeObserver(draw).observe(canvas);
+updateMotionButton();
+draw();
+requestAnimationFrame(animate);
+startDebrief();
+</script>
+</body>
+</html>

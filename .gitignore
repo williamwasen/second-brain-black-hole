@@ -1,0 +1,6 @@
+node_modules/
+.DS_Store
+
+# Your own build contains the full text of your notes. Never commit it.
+my-brain*.html
+my-graph*.json
