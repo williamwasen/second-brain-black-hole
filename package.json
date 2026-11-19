@@ -1,6 +1,6 @@
 {
   "name": "second-brain-black-hole",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A 3D black-hole map of your notes. One HTML file or an Obsidian plugin, runs on the GPU.",
   "type": "module",
   "license": "MIT",
