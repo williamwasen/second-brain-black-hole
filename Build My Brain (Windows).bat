@@ -17,7 +17,7 @@ if errorlevel 1 goto :oldnode
 
 if not exist "node_modules\markdown-it\" (
   echo First run: installing what the importer needs. This takes about a minute...
-  call npm install --no-audit --no-fund
+  call npm install --omit=dev --no-audit --no-fund
   if errorlevel 1 goto :failed
   echo.
 )
