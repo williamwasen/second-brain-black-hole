@@ -1,4 +1,4 @@
-import { debounce, ItemView, Keymap, WorkspaceLeaf } from 'obsidian';
+import { debounce, ItemView, Keymap, Scope, setIcon, WorkspaceLeaf, type KeymapEventHandler } from 'obsidian';
 import { createBlackHole, supportsWebGL2, type BlackHole, type MapNode } from '../src/blackhole.js';
 import type BlackHolePlugin from './main';
 import { buildVaultGraph } from './vault-graph';
@@ -11,11 +11,16 @@ export class BlackHoleView extends ItemView {
   private map: BlackHole | null = null;
   private host: HTMLElement | null = null;
   private message: HTMLElement | null = null;
+  private toolbar: HTMLElement | null = null;
+  private backButton: HTMLButtonElement | null = null;
+  // Escape is only claimed while a group is open, so Obsidian's own Escape works everywhere else.
+  private escapeHandler: KeymapEventHandler | null = null;
   // Many vault events arrive in bursts (sync, bulk renames): rebuild once things settle.
   readonly scheduleRefresh = debounce(() => this.refresh(), 500, true);
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: BlackHolePlugin) {
     super(leaf);
+    this.scope = new Scope(this.app.scope);
   }
 
   getViewType(): string {
@@ -38,6 +43,7 @@ export class BlackHoleView extends ItemView {
       return;
     }
     this.host = this.contentEl.createDiv({cls: 'sbbh-host'});
+    this.buildToolbar(this.host);
     this.register(() => this.closeMap());
     this.registerEvent(this.app.metadataCache.on('resolved', () => this.scheduleRefresh()));
     this.registerEvent(this.app.vault.on('create', () => this.scheduleRefresh()));
@@ -61,6 +67,33 @@ export class BlackHoleView extends ItemView {
     this.map?.resetCamera();
   }
 
+  // Top-left controls: Home is always there; Back appears while a group is open.
+  private buildToolbar(host: HTMLElement): void {
+    this.toolbar = host.createDiv({cls: 'sbbh-toolbar'});
+    this.toolbar.hide();
+    const home = this.toolbar.createEl('button', {cls: 'sbbh-toolbar-button', attr: {type: 'button', 'aria-label': 'Home: back to the full map'}});
+    setIcon(home.createSpan({cls: 'sbbh-toolbar-icon'}), 'home');
+    home.createSpan({text: 'Home'});
+    this.backButton = this.toolbar.createEl('button', {cls: 'sbbh-toolbar-button', text: '← All groups', attr: {type: 'button', 'aria-label': 'Leave this group and show all groups'}});
+    this.backButton.hide();
+    this.registerDomEvent(home, 'click', () => this.map?.resetCamera());
+    this.registerDomEvent(this.backButton, 'click', () => this.map?.focusRegion(null));
+  }
+
+  private onRegionChange(name: string | null): void {
+    if (name === null) this.backButton?.hide();
+    else this.backButton?.show();
+    if (name !== null && !this.escapeHandler) {
+      this.escapeHandler = this.scope?.register([], 'Escape', () => {
+        this.map?.focusRegion(null);
+        return false;
+      }) ?? null;
+    } else if (name === null && this.escapeHandler) {
+      this.scope?.unregister(this.escapeHandler);
+      this.escapeHandler = null;
+    }
+  }
+
   refresh(): void {
     if (!this.host) return;
     const graph = buildVaultGraph(this.app, this.plugin.settings);
@@ -81,7 +114,11 @@ export class BlackHoleView extends ItemView {
       readingPanel: false,
       label: 'Map of your notes. Drag to rotate, scroll to zoom, select a star to open its note.',
       onSelect: (node, {event}) => this.openNote(node, event),
+      onRegionChange: name => this.onRegionChange(name),
+      // The black hole itself is a Home button too, as in the web version.
+      onCoreClick: () => this.map?.resetCamera(),
     });
+    this.toolbar?.show();
   }
 
   private openNote(node: MapNode | null, event: PointerEvent | null): void {
@@ -100,5 +137,7 @@ export class BlackHoleView extends ItemView {
   private closeMap(): void {
     this.map?.destroy();
     this.map = null;
+    this.toolbar?.hide();
+    this.onRegionChange(null);
   }
 }

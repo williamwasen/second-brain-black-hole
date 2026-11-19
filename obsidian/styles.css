@@ -34,3 +34,43 @@
 .sbbh-view .sbbh-core:focus-visible {
   box-shadow: 0 0 0 2px var(--interactive-accent);
 }
+
+/* Home / Back controls, top-left of the map */
+.sbbh-view .sbbh-toolbar {
+  position: absolute;
+  top: var(--size-4-3);
+  left: var(--size-4-3);
+  z-index: 1000;
+  display: flex;
+  gap: var(--size-4-2);
+}
+.sbbh-view .sbbh-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-4-1);
+  height: auto;
+  padding: var(--size-4-1) var(--size-4-3);
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: var(--radius-l);
+  background: rgba(18, 18, 20, .72);
+  box-shadow: none;
+  color: #ededed;
+  font-size: var(--font-ui-small);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+.sbbh-view .sbbh-toolbar-button:hover {
+  background: rgba(40, 40, 44, .86);
+  color: #fff;
+}
+.sbbh-view .sbbh-toolbar-button:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+.sbbh-view .sbbh-toolbar-icon {
+  display: inline-flex;
+}
+.sbbh-view .sbbh-toolbar-icon svg {
+  width: var(--icon-s);
+  height: var(--icon-s);
+}

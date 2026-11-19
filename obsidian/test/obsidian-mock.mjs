@@ -36,6 +36,21 @@ export function debounce(callback, timeout = 0) {
   run.run = () => callback();
   return run;
 }
+export function setIcon(el, icon) { el.dataset.icon = icon; el.append(Object.assign(document.createElementNS('http://www.w3.org/2000/svg', 'svg'), {})); }
+
+// Keys go to the most specific scope first; a key with no handler there moves on to the parent.
+export class Scope {
+  constructor(parent) { this.parent = parent; this.handlers = []; }
+  register(modifiers, key, func) { const handler = { scope: this, modifiers, key, func }; this.handlers.push(handler); return handler; }
+  unregister(handler) { this.handlers = this.handlers.filter(h => h !== handler); }
+  // test helper: returns what the handler returned, or 'passed to parent' when this scope has none
+  handle(key) {
+    const handler = this.handlers.find(h => h.key === key);
+    if (handler) return handler.func(new KeyboardEvent('keydown', { key }), {});
+    return this.parent ? this.parent.handle(key) : 'passed to parent';
+  }
+}
+
 export const Keymap = { isModEvent: event => (event?.ctrlKey || event?.metaKey ? 'tab' : false) };
 
 // Obsidian adds these helpers to every element.
@@ -47,6 +62,17 @@ proto.createDiv ??= function (options = {}) {
   this.append(div);
   return div;
 };
+proto.createEl ??= function (tag, options = {}) {
+  const el = this.ownerDocument.createElement(tag);
+  if (options.cls) el.className = options.cls;
+  if (options.text) el.textContent = options.text;
+  for (const [name, value] of Object.entries(options.attr ?? {})) el.setAttribute(name, value);
+  this.append(el);
+  return el;
+};
+proto.createSpan ??= function (options = {}) { return this.createEl('span', options); };
+proto.hide ??= function () { this.style.display = 'none'; };
+proto.show ??= function () { this.style.display = ''; };
 proto.empty ??= function () { this.replaceChildren(); };
 proto.addClass ??= function (cls) { this.classList.add(cls); };
 Object.defineProperty(proto, 'doc', { configurable: true, get() { return this.ownerDocument; } });
@@ -55,6 +81,7 @@ export class Component {
   _cleanups = [];
   register(callback) { this._cleanups.push(callback); }
   registerEvent(ref) { this.register(() => ref.owner.offref(ref)); }
+  registerDomEvent(el, type, callback, options) { el.addEventListener(type, callback, options); this.register(() => el.removeEventListener(type, callback, options)); }
   unload() { this._cleanups.splice(0).reverse().forEach(callback => callback()); }
 }
 
@@ -172,5 +199,5 @@ export function createApp(fixture) {
     getLeaf: newLeaf => ({ openFile: async file => { opened.push({ path: file.path, newLeaf }); } }),
     getLeavesOfType: () => [],
   });
-  return { vault, metadataCache, workspace, opened };
+  return { vault, metadataCache, workspace, opened, scope: new Scope() };
 }

@@ -171,6 +171,42 @@ try {
     env.plugin.unload();
   }
 
+  // ---- Home, Back and Escape ----
+  {
+    const env = await setup('nested');
+    const view = await open(env);
+    const map = view['map'];
+    const toolbar = view.contentEl.querySelector('.sbbh-toolbar');
+    const [home, back] = toolbar ? [...toolbar.querySelectorAll('button')] : [];
+    const shown = el => !!el && el.style.display !== 'none';
+    const settle = () => wait(1400); // camera flights take 1.2 s
+    const enterGroup = async name => { view.contentEl.querySelectorAll('.sbbh-hub').forEach(b => { if (b.querySelector('.sbbh-hub-name')?.textContent === name) b.click(); }); await settle(); };
+    check('nav: Home and Back exist, Back hidden at start', shown(toolbar) && home?.textContent.includes('Home') && back?.textContent === '← All groups' && !shown(back)
+      && home.getAttribute('aria-label') && back.getAttribute('aria-label'), `${home?.textContent} / ${back?.textContent}`);
+    await enterGroup('Projects');
+    check('nav: entering a group shows Back', map.region === 'Projects' && shown(back), map.region);
+    back.click(); await settle();
+    check('nav: Back leaves the group and hides itself', map.region === null && !shown(back), map.region);
+    check('nav: Escape outside a group does nothing and passes on', view.scope.handle('Escape') === 'passed to parent' && map.region === null);
+    await enterGroup('Reading');
+    const result = view.scope.handle('Escape'); await settle();
+    check('nav: Escape leaves a group and returns false', result === false && map.region === null && !shown(back), `${result}, region ${map.region}`);
+    check('nav: Escape handler removed again outside a group', view.scope.handle('Escape') === 'passed to parent');
+    await enterGroup('Journal');
+    home.click(); await settle();
+    check('nav: Home works from inside a group', map.region === null && !shown(back), map.region);
+    await enterGroup('Projects');
+    const core = view.contentEl.querySelector('.sbbh-core');
+    check('nav: black hole Home button is hidden inside a group (core design)', core?.hidden === true, `hidden=${core?.hidden}`);
+    core.click(); await settle();
+    check('nav: black hole Home button (clicked by script) leaves the group', map.region === null && !shown(back), map.region);
+    check('nav: black hole Home button is visible again on the full map', core.hidden === false);
+    core.click(); await settle();
+    check('nav: black hole Home button from the full map keeps the full map', map.region === null);
+    await close(view);
+    env.plugin.unload();
+  }
+
   // ---- open and close 40 times: nothing left behind ----
   {
     const env = await setup('big');
