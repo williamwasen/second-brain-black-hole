@@ -31,8 +31,9 @@ Or open its page in the [Obsidian community directory](https://community.obsidia
 
 - Drag to rotate, scroll to zoom. Point at a star to see its note's name.
 - Select a star to open the note. Ctrl-click (Cmd-click on Mac) opens it in a new tab.
-- Select a group's name to fly to that group.
-- Select **Home** (top left) or the black hole for a dashboard: note, idea and link counts, notes updated per day, ideas by group and your most connected notes. Select a group or note there to jump to it. **← All groups** or Esc leaves a group; Esc also closes Home.
+- Select a group's name to fly to that group. To go back out, select **← All groups** (top left) or press Esc.
+- Select **Home** (top left) or the black hole to open the dashboard: note, idea and link counts, notes updated per day, ideas by group and your most connected notes. Select a group or note there to jump to it. Press Esc, select **×**, or select **Home** again to close it.
+- To change the chart color, select the palette icon next to **×** on the dashboard. Drag in the color square and hue slider, type a hex code, or pick a swatch (the half-filled one uses your theme's accent color). Select **Save changes** to keep it, or **Revert** to undo.
 - The map updates by itself when you add, rename, link or delete notes, so there's nothing to schedule or rebuild.
 
 ### Settings
