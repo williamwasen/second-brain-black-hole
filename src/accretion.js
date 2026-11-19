@@ -2,9 +2,13 @@
 // Internal distances use Schwarzschild radii; 2.598 Rs is the apparent shadow.
 // The central-force orbit integrator is a finite-step Schwarzschild-inspired
 // approximation. Six independent fields are composited; no binary spacetime.
+import { configureSpaceSky, SPACE_SKY_GLSL } from './sky.js';
+
+export const lensRadius = 0.074 * 1.25;
 const DISK_NORMALS = [[-.12,.98,.16],[.20,.95,.24],[-.10,.99,.12],[.24,.96,-.08],[-.20,.96,.18],[.10,.98,-.16]]
   .map(n => n.map(v => v / Math.hypot(...n)));
-function createAccretionPass(gl, clusters, surface) {
+// scene: {view, time, region} read on every frame
+export function createAccretionPass(gl, clusters, surface, scene) {
   const rs = lensRadius / 2.598076211;
   const normals = DISK_NORMALS;
   const hdr = !!gl.getExtension('EXT_color_buffer_float');
@@ -176,7 +180,7 @@ function createAccretionPass(gl, clusters, surface) {
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
     targets.push({texture,framebuffer,w:0,h:0});
   }
-  const updateSpaceSky = configureSpaceSky(ray.p,gl,0);
+  const updateSpaceSky = configureSpaceSky(ray.p,gl,0,scene);
   function resize(w,h){
     targets.forEach((t,i)=>{
       const divisor=i>2?12:3;
@@ -196,13 +200,13 @@ function createAccretionPass(gl, clusters, surface) {
     resize(surface.width,surface.height);gl.bindVertexArray(vao);target(targets[0]);
     gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
     gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
-    gl.useProgram(ray.p);updateSpaceSky(glowTime);
+    gl.useProgram(ray.p);updateSpaceSky(scene.time);
     gl.uniform2f(ray.u('uViewport'),camera.width,camera.height);
     gl.uniform1f(ray.u('uFocal'),focal);
-    gl.uniform1f(ray.u('uSkyFocal'),Math.min(camera.width,camera.height)*.46*3.4*(1+.10*(view.zoom-1)));
+    gl.uniform1f(ray.u('uSkyFocal'),Math.min(camera.width,camera.height)*.46*3.4*(1+.10*(scene.view.zoom-1)));
     gl.uniform4f(ray.u('uRotation'),camera.cy,camera.sy,camera.cp,camera.sp);
-    gl.uniform1f(ray.u('uTime'),glowTime);
-    stats.steps=region?176:136;stats.visibleHoles=0;gl.uniform1i(ray.u('uSteps'),stats.steps);
+    gl.uniform1f(ray.u('uTime'),scene.time);
+    stats.steps=scene.region?176:136;stats.visibleHoles=0;gl.uniform1i(ray.u('uSteps'),stats.steps);
     const rotate=p=>{const z=p[0]*camera.sy+p[2]*camera.cy;return [p[0]*camera.cy-p[2]*camera.sy,p[1]*camera.cp-z*camera.sp,p[1]*camera.sp+z*camera.cp];};
     const order=clusters.map((_,i)=>i).sort((a,b)=>holes[a*4+2]-holes[b*4+2]);
     for(const i of order){
@@ -229,5 +233,10 @@ function createAccretionPass(gl, clusters, surface) {
     gl.drawArrays(gl.TRIANGLE_STRIP,0,4);gl.activeTexture(gl.TEXTURE0);
     gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
   }
-  return {render,normals,stats};
+  function dispose(){
+    gl.deleteVertexArray(vao);
+    for(const prog of [ray,blur,composite])gl.deleteProgram(prog.p);
+    for(const t of targets){gl.deleteTexture(t.texture);gl.deleteFramebuffer(t.framebuffer);}
+  }
+  return {render,normals,stats,dispose};
 }

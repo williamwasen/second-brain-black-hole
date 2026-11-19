@@ -1,9 +1,9 @@
 // One deterministic celestial sphere, shared by unobstructed sky and bent rays.
 // Generated locally: no tiled or mirrored photograph.
 let spaceSkyTextureCanvas;
-function createSpaceSkyTexture() {
+function createSpaceSkyTexture(doc) {
   if (spaceSkyTextureCanvas) return spaceSkyTextureCanvas;
-  const low = document.createElement('canvas');
+  const low = doc.createElement('canvas');
   low.width = 1024; low.height = 512;
   const context = low.getContext('2d');
   const pixels = context.createImageData(low.width, low.height);
@@ -52,7 +52,7 @@ function createSpaceSkyTexture() {
     }
   }
   context.putImageData(pixels, 0, 0);
-  const canvas = document.createElement('canvas');
+  const canvas = doc.createElement('canvas');
   canvas.width = 4096; canvas.height = 2048;
   const paint = canvas.getContext('2d');
   paint.imageSmoothingEnabled = true;
@@ -97,7 +97,7 @@ function spaceMeteorEvent(lane, time) {
     period, offset, start, duration, cycle};
 }
 
-const SPACE_SKY_GLSL = `
+export const SPACE_SKY_GLSL = `
   uniform sampler2D uSpaceSky;
   uniform vec3 uSpaceObserver;
   uniform vec4 uMeteorHead[${SPACE_METEOR_COUNT}];
@@ -148,14 +148,20 @@ const SPACE_SKY_GLSL = `
   }
 `;
 
+// The 4096x2048 source canvas is only needed while textures are uploaded; free it once a map is built.
+export function releaseSpaceSkyCanvas() {
+  if (spaceSkyTextureCanvas) spaceSkyTextureCanvas.width = spaceSkyTextureCanvas.height = 0;
+  spaceSkyTextureCanvas = null;
+}
+
 const spaceSkyTextures = new WeakMap();
-function configureSpaceSky(program, gl, unit = 0) {
+export function configureSpaceSky(program, gl, unit, scene) {
   let texture = spaceSkyTextures.get(gl);
   if (!texture) {
     texture = gl.createTexture();
     gl.activeTexture(gl.TEXTURE0 + unit);
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, createSpaceSkyTexture());
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, createSpaceSkyTexture(gl.canvas.ownerDocument));
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -171,8 +177,8 @@ function configureSpaceSky(program, gl, unit = 0) {
   return time => {
     gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.uniform1i(sampler, unit);
-    const distance=3.4/Math.max(.5,view.zoom), z=distance*Math.cos(view.pitch);
-    gl.uniform3f(observer, view.center[0]+z*Math.sin(view.yaw), view.center[1]+distance*Math.sin(view.pitch), view.center[2]+z*Math.cos(view.yaw));
+    const distance=3.4/Math.max(.5,scene.view.zoom), z=distance*Math.cos(scene.view.pitch);
+    gl.uniform3f(observer, scene.view.center[0]+z*Math.sin(scene.view.yaw), scene.view.center[1]+distance*Math.sin(scene.view.pitch), scene.view.center[2]+z*Math.cos(scene.view.yaw));
     for (let i = 0; i < SPACE_METEOR_COUNT; i++) {
       const meteor = spaceMeteorEvent(i, time);
       heads.set([...meteor.head, meteor.brightness], i * 4);
@@ -190,7 +196,8 @@ function spaceSkyMeteorProbe() {
     timeDuring, yaw: Math.atan2(-during.head[0], -during.head[2]), pitch: -Math.asin(during.head[1])};
 }
 
-function createSkyRenderer(canvas, _photo) {
+// scene: {view, time} read on every frame
+export function createSkyRenderer(canvas, scene) {
   const gl = canvas.getContext('webgl2', {alpha: false, antialias: false});
   if (!gl) return null;
   const program = gl.createProgram();
@@ -223,25 +230,26 @@ function createSkyRenderer(canvas, _photo) {
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw Error(gl.getProgramInfoLog(program));
   const scale = gl.getUniformLocation(program, 'uRayScale'), rotation = gl.getUniformLocation(program, 'uRotation');
   const timeLocation = gl.getUniformLocation(program, 'uSkyTime');
-  const updateSky = configureSpaceSky(program, gl, 0);
+  const updateSky = configureSpaceSky(program, gl, 0, scene);
   let previous = '';
   const render = camera => {
     if (gl.isContextLost()) return false;
     const {width, height, cy, sy, cp, sp} = camera;
-    const key = [width, height, cy, sy, cp, sp, view.zoom, window.devicePixelRatio, glowTime].join(',');
+    const key = [width, height, cy, sy, cp, sp, scene.view.zoom, window.devicePixelRatio, scene.time].join(',');
     if (key === previous) return true;
     previous = key;
     const dpr = Math.min(window.devicePixelRatio || 1, Math.sqrt(6000000 / Math.max(1, width * height)));
     const w = Math.max(1, Math.round(width * dpr)), h = Math.max(1, Math.round(height * dpr));
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
-    const focal = Math.min(width, height) * .46 * 3.4 * (1 + .10 * (view.zoom - 1));
-    gl.useProgram(program); gl.viewport(0, 0, w, h); updateSky(glowTime);
+    const focal = Math.min(width, height) * .46 * 3.4 * (1 + .10 * (scene.view.zoom - 1));
+    gl.useProgram(program); gl.viewport(0, 0, w, h); updateSky(scene.time);
     gl.uniform2f(scale, width / (2 * focal), height / (2 * focal));
-    gl.uniform4f(rotation, cy, sy, cp, sp); gl.uniform1f(timeLocation, glowTime);
+    gl.uniform4f(rotation, cy, sy, cp, sp); gl.uniform1f(timeLocation, scene.time);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     return true;
   };
   render.meteorProbe = spaceSkyMeteorProbe();
   render.gl = gl;
+  render.dispose = () => { gl.deleteProgram(program); gl.deleteTexture(spaceSkyTextures.get(gl)); spaceSkyTextures.delete(gl); };
   return render;
 }

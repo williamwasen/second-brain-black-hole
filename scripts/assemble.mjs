@@ -15,8 +15,20 @@ export function assemble(graph) {
   const data = JSON.stringify({ nodes: graph.nodes, edges: graph.edges, regions: graph.regions })
     .replace(/</g, '\\u003c');
   return read('prototype.html')
+    .replace('@@CORE_CSS@@', () => read('blackhole.css'))
+    .replace('@@SCRIPT@@', () => inlineModules())
     .replace('@@GRAPH@@', () => data)
-    .replace('@@LENSING@@', () => `${read('accretion.js')}\n${read('lensing.js')}`)
-    .replace('@@SKY@@', () => read('sky.js'))
     .replace('@@OWNER@@', () => owner);
+}
+
+// shortcut: joins src/ modules into one classic script by dropping their import/export lines instead of
+// bundling, so the importer needs no build tools. Works while modules only use `import {..} from './x.js'`
+// and `export function/const`; switch to a bundler if that changes.
+const MODULES = ['sky.js', 'accretion.js', 'lensing.js', 'blackhole.js', 'app.mjs'];
+function inlineModules() {
+  const body = MODULES.map(file => read(file)
+    .replace(/^import .*;\n/gm, '')
+    .replace(/^export \{[^}]*\};\n/gm, '')
+    .replace(/^export (?=function|const|let|class)/gm, '')).join('\n');
+  return `(() => {\n${body}\n})();`;
 }

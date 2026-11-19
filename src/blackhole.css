@@ -1,0 +1,41 @@
+/* The black-hole map's own styles. Everything is scoped under .sbbh (set by createBlackHole on its container). */
+.sbbh { --sbbh-text: #ededed; --sbbh-border: rgba(255, 255, 255, .09); --sbbh-accent-soft: rgba(255, 255, 255, .08); --sbbh-ring: rgba(255, 255, 255, .22); }
+/* base for the map's buttons, so host-page button styles don't leak in */
+.sbbh .sbbh-hub, .sbbh .sbbh-core { display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0; background: transparent; color: #ababab; border: 0; box-shadow: none; font: inherit; }
+.sbbh .sbbh-core:hover { color: #fff; }
+.sbbh .sbbh-hubs { position: absolute; inset: 0; pointer-events: none; }
+.sbbh .sbbh-hub { position: absolute; width: 44px; height: 44px; transform: translate(-50%, -50%); pointer-events: auto; overflow: visible; color: #fff; }
+.sbbh .sbbh-hub:hover { color: #fff; background: transparent; }
+.sbbh .sbbh-hub-dot { position: relative; width: 26px; height: 26px; background: radial-gradient(circle, #fff 0%, #fffffff0 4%, #ffffffa0 10%, #ffffff48 22%, #ffffff14 43%, transparent 70%); filter: brightness(1.8) drop-shadow(0 0 6px #ffffffb0); flex-shrink: 0; transition: scale .16s; }
+.sbbh .sbbh-hub-dot::before, .sbbh .sbbh-hub-dot::after { content: ''; position: absolute; top: 50%; left: 50%; width: 36px; height: 1px; border-radius: 100%; background: linear-gradient(90deg, transparent, #ffffff75 25%, #fff 45% 55%, #ffffff75 75%, transparent); transform: translate(-50%, -50%); }
+.sbbh .sbbh-hub-dot::after { width: 32px; transform: translate(-50%, -50%) rotate(90deg); }
+.sbbh .sbbh-hub:hover .sbbh-hub-dot, .sbbh .sbbh-hub:focus-visible .sbbh-hub-dot { scale: 1.18; }
+.sbbh .sbbh-lensed .sbbh-hub { width: var(--hub-hit, 44px); height: var(--hub-hit, 44px); }
+.sbbh .sbbh-lensed .sbbh-hub-dot { width: var(--shadow-size, 24px); height: var(--shadow-size, 24px); background: transparent; box-shadow: none; border: 1px solid transparent; }
+.sbbh .sbbh-lensed .sbbh-hub-dot::before, .sbbh .sbbh-lensed .sbbh-hub-dot::after { display: none; }
+.sbbh .sbbh-lensed .sbbh-hub:hover .sbbh-hub-dot, .sbbh .sbbh-lensed .sbbh-hub:focus-visible .sbbh-hub-dot { border-color: #ffffff65; scale: 1.04; }
+.sbbh .sbbh-lensed .sbbh-hub-name { top: var(--hub-label-y, 44px); }
+.sbbh .sbbh-hub-name { position: absolute; top: 41px; left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 2px 7px; border-radius: 12px; color: #f1f1f1; background: #080808d9; font-size: 11px; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .sbbh .sbbh-hub-dot{ transition: none; } }
+.sbbh { --sb-cursor: -webkit-image-set(url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAT0lEQVR42mNgGAWUgTwkPDAO+A8Eow4YdcCoA0YdMKAOGOiScPhWLIQwviggxxxEgiIE0C3DJUaiOYMjBEbBaIto1AGjDhh1wKgDRmaLCAAfZ8AdGpI3cgAAAABJRU5ErkJggg==) 1x, url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAhklEQVR42u3ZQQqAIBBA0Tmx99/VxqUhKSoy74O7FvYgqSlCks5UPhaAVABPDQAAAAAAAAAAAAAAAAAAAAAAAEAWgDATzAsg6a7DaXaNHoK79gOg+YIyW+/G/l63cD8APAIAJMnnMAAjMQAAAAAAAAAAAAAAAAAAAAAAAAALAcJM0B8bnewFSL0Anmz1A+UAAAAASUVORK5CYII=) 2x) 16 16, crosshair; }
+.sbbh, .sbbh *, .sbbh *::before, .sbbh *::after { cursor: var(--sb-cursor); }
+.sbbh canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.sbbh .sbbh-sky, .sbbh .sbbh-signals, .sbbh .sbbh-lens { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.sbbh .sbbh-graph { position: relative; }
+.sbbh .sbbh-core {position:absolute;transform:translate(-50%,-50%);border-radius:50%;border:1px solid transparent;}
+.sbbh .sbbh-core:hover, .sbbh .sbbh-core:focus-visible {border-color:#fff5;background:transparent;}
+.sbbh .sbbh-core span {position:absolute;top:calc(100% + 10px);font-size:11px;background:#080808c9;padding:2px 9px;border-radius:14px;}
+.sbbh .sbbh-hub {width:auto;min-width:44px;height:32px;border-radius:9px;padding:0 10px;background:#080d1899;}
+.sbbh .sbbh-hub-dot {display:none;}
+.sbbh .sbbh-hub-name {position:static;transform:none;padding:0;background:none;font-size:12px;font-weight:500;letter-spacing:-.015em;}
+.sbbh .sbbh-core span {font-size:13px;font-weight:500;letter-spacing:-.015em;}
+.sbbh .sbbh-hub { height: 30px; padding: 0 13px; border-radius: 999px; background: rgba(12, 16, 30, .6); border: 1px solid var(--sbbh-border); backdrop-filter: blur(10px); color: var(--sbbh-text); transition: background .15s, border-color .15s; }
+.sbbh .sbbh-hub:hover, .sbbh .sbbh-hub:focus-visible { background: var(--sbbh-accent-soft); border-color: var(--sbbh-ring); }
+.sbbh .sbbh-hub-name { font-size: 12px; font-weight: 500; }
+.sbbh .sbbh-core span { padding: 3px 13px; border-radius: 999px; background: rgba(12, 16, 30, .6); border: 1px solid var(--sbbh-border); backdrop-filter: blur(10px); font-size: 12px; font-weight: 500; }
+.sbbh .sbbh-sky { filter: grayscale(1) brightness(.8); }
+.sbbh .sbbh-hub { height: auto; min-width: 0; padding: 4px 9px; display: flex; flex-direction: column; align-items: center; gap: 1px; background: transparent; border: 1px solid transparent; backdrop-filter: none; border-radius: 10px; text-shadow: 0 0 10px #000, 0 0 2px #000; }
+.sbbh .sbbh-hub:hover, .sbbh .sbbh-hub:focus-visible { background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .12); }
+.sbbh .sbbh-hub-name { font-size: 12px; font-weight: 600; letter-spacing: -.01em; color: #f4f4f4; }
+.sbbh .sbbh-hub-count { font-size: 10px; color: #9a9a9a; pointer-events: none; }
+.sbbh .sbbh-core span { background: rgba(18, 18, 20, .7); }

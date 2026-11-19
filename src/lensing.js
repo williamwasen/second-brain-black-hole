@@ -1,14 +1,24 @@
 // World-space thin-lens approximation. The map camera is 3.4 units from
 // its target. Capture is evaluated independently by intersecting camera rays
 // with each spherical shadow.
-const lensRadius = 0.074 * 1.25;
 
-function createLensRenderer(clusters) {
-  const surface = document.createElement('canvas');
+import { createAccretionPass, lensRadius } from './accretion.js';
+
+export { lensRadius };
+
+export function randomSource(seed) {
+  return () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+}
+
+// scene: {view, time, region} read on every frame. surface: a canvas; pass the old one to rebuild in the same WebGL context.
+export function createLensRenderer(clusters, scene, surface) {
   const gl = surface.getContext('webgl2', {alpha: true, antialias: false, depth: false});
   if (!gl) return null;
 
-  const accretion = createAccretionPass(gl, clusters, surface);
+  const accretion = createAccretionPass(gl, clusters, surface, scene);
   const count = clusters.length;
   const cameraGLSL = `
     const int LENS_COUNT = ${count};
@@ -244,7 +254,7 @@ function createLensRenderer(clusters) {
   gl.bindVertexArray(vao);
   gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
-  for (const [attribute, size] of [[0, 3], [1, 4]]) {
+  for (const attribute of [0, 1]) {
     gl.enableVertexAttribArray(attribute);
     gl.vertexAttribDivisor(attribute, 1);
   }
@@ -266,7 +276,7 @@ function createLensRenderer(clusters) {
       surface.height = h;
     }
     clusters.forEach((cluster, index) => {
-      const [x, y, z] = cluster.center.map((value, axis) => value - view.center[axis]);
+      const [x, y, z] = cluster.center.map((value, axis) => value - scene.view.center[axis]);
       const rz = x * sy + z * cy;
       const visible = visibility.get(cluster.name);
       holes.set([x * cy - z * sy, y * cp - rz * sp, y * sp + rz * cp, visible], index * 4);
@@ -274,12 +284,12 @@ function createLensRenderer(clusters) {
     });
     // The six particle groups share one central gravitational source.
     holes.fill(0);
-    const [hx,hy,hz] = view.center.map(v => -v);
+    const [hx,hy,hz] = scene.view.center.map(v => -v);
     const rz = hx*sy + hz*cy;
     holes.set([hx*cy-hz*sy,hy*cp-rz*sp,hy*sp+rz*cp,1],0);
     gl.viewport(0, 0, w, h);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    const focal = Math.min(width, height) * 0.46 * view.zoom * 3.4;
+    const focal = Math.min(width, height) * 0.46 * scene.view.zoom * 3.4;
     const configure = ({id, loc}) => {
       gl.useProgram(id);
       gl.uniform2f(loc.Viewport, width, height);
@@ -290,12 +300,12 @@ function createLensRenderer(clusters) {
     configure(stars);
     gl.bindVertexArray(vao);
     const {loc} = stars;
-    gl.uniform3fv(loc.Target, view.center);
+    gl.uniform3fv(loc.Target, scene.view.center);
     gl.uniform3fv(loc.Centers, centers);
     gl.uniform4f(loc.Rotation, cy, sy, cp, sp);
     gl.uniform1fv(loc.Opacity, opacity);
-    gl.uniform1f(loc.Time, glowTime);
-    gl.uniform1f(loc.Zoom, view.zoom);
+    gl.uniform1f(loc.Time, scene.time);
+    gl.uniform1f(loc.Zoom, scene.view.zoom);
     for (const secondary of [0, 1]) {
       gl.uniform1i(loc.Secondary, secondary);
       for (const [index, batch] of batches.entries()) {
@@ -307,6 +317,11 @@ function createLensRenderer(clusters) {
     }
     return surface;
   };
-  Object.assign(render, {surface, gl, diskNormals: accretion.normals, stats: accretion.stats});
+  const dispose = () => {
+    accretion.dispose();
+    gl.deleteProgram(stars.id); gl.deleteProgram(shadows.id);
+    gl.deleteBuffer(buffer); gl.deleteVertexArray(vao); gl.deleteVertexArray(emptyVao);
+  };
+  Object.assign(render, {surface, gl, dispose, diskNormals: accretion.normals, stats: accretion.stats});
   return render;
 }
