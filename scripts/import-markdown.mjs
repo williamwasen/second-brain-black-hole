@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { dirname, join, posix, relative, resolve, sep } from 'node:path';
 import MarkdownIt from 'markdown-it';
 import { assemble } from './assemble.mjs';
+import { CLUSTER_MODES, buildRegions, clusterNotes, degrees, keepMostConnected } from '../src/graph.js';
 
 const HELP = String.raw`Builds a 3D map (one HTML file) from a folder of Markdown notes.
 
@@ -31,7 +32,6 @@ Put paths with spaces in "quotes". The map holds the full text of your notes: ke
 // ---- arguments ----
 const fail = message => { console.error(`Error: ${message}`); process.exit(1); };
 const VALUE_FLAGS = { owner: '--owner "Your Name"', out: '--out my-brain.html', max: '--max 500', json: '--json graph.json', cluster: '--cluster tags' };
-const CLUSTER_MODES = ['auto', 'folders', 'tags', 'links'];
 const opts = {};
 const positional = [];
 const argv = process.argv.slice(2);
@@ -186,82 +186,21 @@ let rendered = notes.map((note, index) => {
 // ---- keep the most connected notes if the vault is huge ----
 let edges = [...edgeSet].map(e => e.split(',').map(Number));
 if (rendered.length > maxNotes) {
-  const degree = new Array(rendered.length).fill(0);
-  edges.forEach(([a, b]) => { degree[a]++; degree[b]++; });
-  const keep = rendered.map((_, i) => i)
-    .sort((a, b) => degree[b] - degree[a] || rendered[b].note.modified - rendered[a].note.modified)
-    .slice(0, maxNotes).sort((a, b) => a - b);
-  const remap = new Map(keep.map((old, i) => [old, i]));
+  const kept = keepMostConnected(rendered.map(r => r.note), edges, maxNotes);
   console.log(`Vault has ${rendered.length} notes; showing the ${maxNotes} most connected (change with --max).`);
-  rendered = keep.map(i => rendered[i]);
-  edges = edges.filter(([a, b]) => remap.has(a) && remap.has(b)).map(([a, b]) => [remap.get(a), remap.get(b)]);
+  rendered = kept.keep.map(i => rendered[i]);
+  edges = kept.edges;
   // data-page attributes inside kept notes still point at old indexes: rewrite them
+  const {remap} = kept;
   rendered.forEach(r => { r.html = r.html.replace(/data-page="(\d+)"/g, (m, n) => remap.has(Number(n)) ? `data-page="${remap.get(Number(n))}"` : 'data-page=""'); });
 }
 edges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
 
-// ---- clusters: by folders, tags or links; at most six ----
-const degree = new Array(rendered.length).fill(0);
-edges.forEach(([a, b]) => { degree[a]++; degree[b]++; });
-const byTags = () => {
-  const freq = new Map();
-  rendered.forEach(r => r.note.tags.forEach(t => freq.set(t, (freq.get(t) || 0) + 1)));
-  // each note joins its tag that is most common across the vault
-  return rendered.map(r => [...r.note.tags].sort((a, b) => freq.get(b) - freq.get(a) || a.localeCompare(b))[0] ?? 'Untagged');
-};
-const byLinks = () => {
-  // label propagation in a fixed order, so the same notes always give the same groups
-  const near = rendered.map(() => []);
-  edges.forEach(([a, b]) => { near[a].push(b); near[b].push(a); });
-  const label = rendered.map((_, i) => i);
-  for (let round = 0, changed = true; changed && round < 50; round++) {
-    changed = false;
-    near.forEach((list, i) => {
-      if (!list.length) return;
-      const votes = new Map();
-      list.forEach(j => votes.set(label[j], (votes.get(label[j]) || 0) + 1));
-      const top = Math.max(...votes.values());
-      if (votes.get(label[i]) === top) return;
-      label[i] = Math.min(...[...votes].filter(([, v]) => v === top).map(([l]) => l));
-      changed = true;
-    });
-  }
-  const hub = new Map(); // label -> its most-linked note
-  label.forEach((l, i) => { if (near[i].length && (!hub.has(l) || degree[i] > degree[hub.get(l)])) hub.set(l, i); });
-  const names = new Map(), used = new Set();
-  for (const [l, i] of hub) {
-    let name = rendered[i].note.title;
-    for (let k = 2; used.has(name); k++) name = `${rendered[i].note.title} (${k})`;
-    used.add(name); names.set(l, name);
-  }
-  return label.map((l, i) => near[i].length ? names.get(l) : 'Unlinked');
-};
-const grouping = { folders: () => rendered.map(r => r.note.folder), tags: byTags, links: byLinks };
-const distinct = list => new Set(list).size;
-let method = clusterMode;
-if (method === 'auto') {
-  const tags = byTags(), tagged = tags.filter(t => t !== 'Untagged');
-  method = distinct(grouping.folders()) >= 2 ? 'folders'
-    : distinct(tagged) >= 3 && tagged.length * 2 >= tags.length ? 'tags'
-    : distinct(byLinks()) >= 2 ? 'links' : 'folders';
-}
-const groupOf = grouping[method]();
-
-const slots = [
-  { center: [-0.86, -0.04, -0.23], spread: [0.21, 0.22, 0.20], density: 850 },
-  { center: [0.76, 0.47, 0.02], spread: [0.20, 0.20, 0.16], density: 740 },
-  { center: [0.06, 0.18, 0.12], spread: [0.26, 0.23, 0.24], density: 1350 },
-  { center: [-0.44, -0.63, 0.04], spread: [0.25, 0.25, 0.18], density: 1030 },
-  { center: [0.72, -0.39, -0.20], spread: [0.26, 0.22, 0.21], density: 920 },
-  { center: [-0.50, 0.63, -0.17], spread: [0.18, 0.16, 0.15], density: 460 },
-];
-const counts = new Map();
-groupOf.forEach(g => counts.set(g, (counts.get(g) || 0) + 1));
-const ranked = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name);
-const keepGroups = ranked.length > 6 ? ranked.slice(0, 5) : ranked;
-const regionOf = group => keepGroups.includes(group) ? group : 'Other';
-const regionNames = ranked.length > 6 ? [...keepGroups, 'Other'] : keepGroups;
-const regions = Object.fromEntries(regionNames.map((name, i) => [name, structuredClone(slots[i])]));
+// ---- clusters: by folders, tags or links; at most six (shared with the Obsidian plugin) ----
+const degree = degrees(rendered.length, edges);
+const {groups: groupOf, method} = clusterNotes(rendered.map(r => r.note), edges, clusterMode);
+const {regions, regionOf} = buildRegions(groupOf);
+const regionNames = Object.keys(regions);
 
 let seed = 19;
 const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
