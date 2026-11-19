@@ -16,10 +16,10 @@ First, read the repo's README.md so you understand what the viewer and its impor
 4. Whether I want an AI layer, such as sorting new notes into folders, linking related notes, or writing short summaries. If yes, which AI service I'm okay using. Warn me that any AI service I choose will receive the notes it processes.
 
 Then build the whole pipeline, in this order:
-1. Install what is needed (Node.js 18 or newer, the repo's dependencies). Tell me before installing anything.
-2. Create a folder of Markdown notes from my source. Work on copies and never modify or delete my original notes. Use [[wiki links]] or relative links between related notes, because every link becomes a connection in the map. Use top-level folders as the clusters, with at most six.
-3. Run `npm run import -- <my notes folder> --owner "<my name>"` and open the result with me to check that it looks right.
-4. If I asked for automation, set up a scheduled refresh for my operating system and show me how to turn it off.
+1. Install what is needed (the LTS version of Node.js, 18 or newer, then `npm install` in the repo). Tell me before installing anything. On Windows, if git isn't installed, download the repo with "Code → Download ZIP", and use PowerShell for commands (if `npm` says running scripts is disabled, use `npm.cmd`).
+2. Create a folder of Markdown notes from my source. Work on copies and never modify or delete my original notes. Use [[wiki links]] or relative links between related notes, because every link becomes a connection in the map. Group notes into at most six top-level folders, or tag them; the importer picks folders, tags or link groups automatically (see `--cluster` in the README).
+3. Run `node scripts/import-markdown.mjs "<my notes folder>" --owner "<my name>" --open` from the repo folder and check the result with me. On Windows, use the full path in double quotes with no trailing backslash, like `"C:\Users\Me\Documents\Notes"`.
+4. If I asked for automation, set up a scheduled refresh for my operating system: Task Scheduler on Windows (a task that runs `node.exe` with full, quoted paths and the repo folder as "Start in"), launchd on Mac, cron or a systemd timer on Linux. Leave out `--open` there so a browser doesn't pop up. Run it once to test, and show me how to turn it off.
 5. If I asked for an AI layer, add it as a separate, optional step. Keep my API keys in a local environment file that is never committed. Start with a small test batch of notes and show me the cost estimate and the results before processing everything.
 
 Rules:
