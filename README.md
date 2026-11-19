@@ -4,7 +4,7 @@ A 3D map of your notes. One black hole sits in the middle, your notes orbit it a
 
 There are two ways to use it:
 
-- **[Use it in Obsidian](#use-it-in-obsidian)**: a plugin that shows your vault as the black hole in its own tab. No terminal needed.
+- **[Use it in Obsidian](#use-it-in-obsidian)**: a plugin in Obsidian's community plugin list that shows your vault as the black hole in its own tab. No terminal needed.
 - **[Use it with any notes folder](#use-it-with-any-notes-folder)**: turn a folder of Markdown files into one HTML file you can open in a browser.
 
 It is only the visual. It has no note-taking app, AI or sync built in.
@@ -19,16 +19,13 @@ It shows 14 made-up notes. Drag to rotate, scroll to zoom, click a star to read 
 
 The plugin shows your vault as the black hole in an Obsidian tab. Desktop only (Windows, Mac and Linux).
 
-### Install with BRAT (until it's in the community plugin list)
-
-[BRAT](https://github.com/TfTHacker/obsidian42-brat) is a community plugin that installs plugins straight from GitHub.
+### Install
 
 1. In Obsidian, open **Settings → Community plugins**. If asked, select **Turn on community plugins**.
-2. Select **Browse**, search for **BRAT**, then select **Install** and **Enable**.
-3. Open **Settings → BRAT** and select **Add beta plugin**.
-4. Paste `https://github.com/williamwasen/second-brain-black-hole` and select **Add plugin**.
-5. In **Settings → Community plugins**, turn on **Second Brain Black Hole**.
-6. Select the orbit icon in the left sidebar, or open the command palette (Ctrl+P, or Cmd+P on Mac) and run **Open black hole map**.
+2. Select **Browse**, search for **Second Brain Black Hole**, then select **Install** and **Enable**.
+3. Select the orbit icon in the left sidebar, or open the command palette (Ctrl+P, or Cmd+P on Mac) and run **Open black hole map**.
+
+Or open its page in the [Obsidian community directory](https://community.obsidian.md/plugins/second-brain-black-hole) and select **Add to Obsidian**.
 
 ### Using it
 
@@ -129,7 +126,7 @@ That type-checks the plugin and writes `main.js` and `styles.css` to the repo fo
 
 - `npm run lint` checks the code with the same rules as Obsidian's plugin review.
 - `npm run test:plugin` writes test vaults to `test-vaults/` (open them in Obsidian to try things by hand) and builds `test-vaults/harness.html`, which runs the plugin against a stand-in for Obsidian's API in a browser. Open it through a local web server, for example `npx http-server test-vaults`.
-- Releases: run `npm version 0.2.0` (it updates `manifest.json` and `versions.json` too), then push the tag with `git push origin 0.2.0`. A GitHub Action builds the plugin and attaches `main.js`, `manifest.json` and `styles.css` to a draft release for you to publish.
+- Releases: run `npm version 0.2.0` (it updates `manifest.json` and `versions.json` too), then push the tag with `git push origin 0.2.0`. A GitHub Action builds the plugin and attaches `main.js`, `manifest.json` and `styles.css` to a draft release for you to publish. Obsidian picks up each published release and reviews it automatically.
 
 Code layout: the visual lives in `src/` (`blackhole.js` and the WebGL files it uses), shared by the HTML page (`src/prototype.html` and `src/app.mjs`) and the plugin (`obsidian/`). `src/graph.js` holds the grouping rules both use.
 
