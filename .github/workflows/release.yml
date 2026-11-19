@@ -1,0 +1,57 @@
+# Push a version tag (for example 0.2.0, no "v") to build the Obsidian plugin and attach
+# main.js, manifest.json and styles.css to a draft GitHub release. Publish the draft by hand.
+name: Release Obsidian plugin
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Check the tag matches manifest.json, package.json and versions.json
+        run: |
+          node -e '
+            const tag = process.argv[1];
+            const read = file => JSON.parse(require("fs").readFileSync(file, "utf8"));
+            const manifest = read("manifest.json"), pkg = read("package.json"), versions = read("versions.json");
+            const problems = [];
+            if (manifest.version !== tag) problems.push(`manifest.json has ${manifest.version}`);
+            if (pkg.version !== tag) problems.push(`package.json has ${pkg.version}`);
+            if (versions[tag] !== manifest.minAppVersion) problems.push(`versions.json has no "${tag}": "${manifest.minAppVersion}"`);
+            if (problems.length) { console.error(`Tag ${tag} does not match: ${problems.join("; ")}. Use npm version <x.y.z> to bump all three.`); process.exit(1); }
+          ' "$GITHUB_REF_NAME"
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build:plugin
+
+      - name: Record build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --draft \
+            --notes "Obsidian plugin $GITHUB_REF_NAME. Install with BRAT, see the README." \
+            main.js manifest.json styles.css
