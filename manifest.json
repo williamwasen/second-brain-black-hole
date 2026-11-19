@@ -1,0 +1,10 @@
+{
+	"id": "second-brain-black-hole",
+	"name": "Second Brain Black Hole",
+	"version": "0.1.0",
+	"minAppVersion": "1.7.2",
+	"description": "See your vault as a 3D black hole. Notes orbit as stars grouped by folder, tag or links, and selecting a star opens the note.",
+	"author": "williamwasen",
+	"authorUrl": "https://github.com/williamwasen",
+	"isDesktopOnly": true
+}

@@ -1,7 +1,7 @@
 {
   "name": "second-brain-black-hole",
   "version": "0.1.0",
-  "description": "A 3D black-hole map of your notes. One HTML file, runs on the GPU.",
+  "description": "A 3D black-hole map of your notes. One HTML file or an Obsidian plugin, runs on the GPU.",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -10,9 +10,22 @@
   "scripts": {
     "import": "node scripts/import-markdown.mjs",
     "demo": "node scripts/import-markdown.mjs examples/notes --owner \"Demo Brain\" --out docs/index.html",
-    "sample": "node scripts/build.mjs"
+    "sample": "node scripts/build.mjs",
+    "build:plugin": "tsc --noEmit && node obsidian/esbuild.config.mjs production",
+    "dev:plugin": "node obsidian/esbuild.config.mjs",
+    "lint": "eslint .",
+    "version": "node scripts/version-bump.mjs && git add manifest.json versions.json",
+    "test:plugin": "node obsidian/test/make-vaults.mjs && node obsidian/test/build-harness.mjs"
   },
   "dependencies": {
     "markdown-it": "^15.0.3"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-obsidianmd": "^0.6.0",
+    "obsidian": "^1.14.4",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.73.0"
   }
 }

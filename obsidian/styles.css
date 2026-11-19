@@ -1,0 +1,36 @@
+/* Plugin styles. The map's own styles come from src/blackhole.css and are all scoped under .sbbh. */
+@import "../src/blackhole.css";
+
+.sbbh-view.view-content {
+  padding: 0;
+  overflow: hidden;
+}
+.sbbh-view .sbbh-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* the map is always night sky, in light and dark themes */
+  background: #030303;
+}
+.sbbh-view .sbbh-message {
+  max-width: 34em;
+  margin: var(--size-4-8) auto;
+  padding: var(--size-4-4);
+  color: var(--text-muted);
+  font-size: var(--font-ui-medium);
+  text-align: center;
+}
+.sbbh-view .sbbh-host + .sbbh-message {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  background: var(--background-primary);
+  border: var(--border-width) solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+}
+.sbbh-view .sbbh-hub:focus-visible,
+.sbbh-view .sbbh-core:focus-visible {
+  box-shadow: 0 0 0 2px var(--interactive-accent);
+}
