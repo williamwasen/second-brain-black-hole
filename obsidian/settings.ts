@@ -7,6 +7,8 @@ export interface BlackHoleSettings {
   maxNotes: number;
   excludedFolders: string[];
   showUnlinked: boolean;
+  // dashboard chart color as #rrggbb; empty uses the theme accent
+  chartColor: string;
 }
 
 export const DEFAULT_SETTINGS: BlackHoleSettings = {
@@ -14,6 +16,7 @@ export const DEFAULT_SETTINGS: BlackHoleSettings = {
   maxNotes: 500,
   excludedFolders: [],
   showUnlinked: true,
+  chartColor: '',
 };
 
 const MODE_NAMES: Record<ClusterMode, string> = {

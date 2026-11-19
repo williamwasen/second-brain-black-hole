@@ -71,6 +71,7 @@ proto.createEl ??= function (tag, options = {}) {
   return el;
 };
 proto.createSpan ??= function (options = {}) { return this.createEl('span', options); };
+proto.setCssProps ??= function (props) { for (const [k, v] of Object.entries(props)) this.style.setProperty(k, v); };
 proto.hide ??= function () { this.style.display = 'none'; };
 proto.show ??= function () { this.style.display = ''; };
 proto.empty ??= function () { this.replaceChildren(); };

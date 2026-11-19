@@ -19,6 +19,8 @@ function countUpNumber(element, value, duration = 900) {
 
 export function hideDashboardTip(els) { els.tip.hidden = true; }
 
+let chartLabels = 0;
+
 /**
  * els: {panel, date, kpis, activity, groups, connected, tip}: elements to fill (panel is the scrolling box).
  * graph: {nodes, edges, regions}. options: {countUp, onGroup(name), onNote(index)}.
@@ -86,7 +88,10 @@ export function renderHomeDashboard(els, graph, {countUp = false, onGroup, onNot
   const svg = doc.createElementNS(svgNS, 'svg');
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', `Pages updated per day over the last 30 days; ${counts.reduce((a, b) => a + b, 0)} updates in total, most in one day ${max}.`);
+  // The chart's name is hidden text, not aria-label: apps like Obsidian turn aria-label into hover tooltips.
+  const chartLabel = Object.assign(doc.createElement('span'), {className: 'sbbh-sr', id: `sbbh-chart-label-${++chartLabels}`,
+    textContent: `Pages updated per day over the last 30 days; ${counts.reduce((a, b) => a + b, 0)} updates in total, most in one day ${max}.`});
+  svg.setAttribute('aria-labelledby', chartLabel.id);
   const el = (name, attrs, text, parent = svg) => { const e = doc.createElementNS(svgNS, name); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text != null) e.textContent = text; parent.append(e); return e; };
   const defs = el('defs', {});
   for (const [id, from, to] of [['bar-fill', '#c58dff', '#9a45ff'], ['bar-hover', '#dcb8ff', '#b06cff']]) {
@@ -112,7 +117,7 @@ export function renderHomeDashboard(els, graph, {countUp = false, onGroup, onNot
     hit.addEventListener('pointermove', event => tip(event, `${count} ${count === 1 ? 'page' : 'pages'}`, fmt(days[i])));
     hit.addEventListener('pointerleave', hide);
   });
-  box.replaceChildren(svg);
+  box.replaceChildren(chartLabel, svg);
 
   // Ideas by group and most connected pages: one series each, labelled bars.
   const barRow = (name, value, maxValue, detail, onClick) => {
@@ -122,7 +127,7 @@ export function renderHomeDashboard(els, graph, {countUp = false, onGroup, onNot
     track.append(Object.assign(doc.createElement('span'), {className: 'fill', style: `width:${Math.max(2, 100 * value / maxValue)}%`}));
     button.append(Object.assign(doc.createElement('span'), {className: 'name', textContent: name}),
       Object.assign(doc.createElement('span'), {className: 'value', textContent: value}), track);
-    button.setAttribute('aria-label', `${name}: ${detail}`);
+    button.setAttribute('aria-description', detail);
     button.addEventListener('pointermove', event => tip(event, name, detail));
     button.addEventListener('pointerleave', hide);
     button.addEventListener('click', () => { hide(); onClick(); });

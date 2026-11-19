@@ -63,7 +63,7 @@ try {
     const { plugin } = await setup('nested');
     check('plugin: view, ribbon icon and command registered', plugin.views.has('second-brain-black-hole') && plugin.ribbon?.title === 'Open black hole map'
       && plugin.commands.some(c => c.id === 'open-map' && c.name === 'Open black hole map'));
-    check('plugin: default settings', JSON.stringify(plugin.settings) === JSON.stringify({ clusterMode: 'auto', maxNotes: 500, excludedFolders: [], showUnlinked: true }), JSON.stringify(plugin.settings));
+    check('plugin: default settings', JSON.stringify(plugin.settings) === JSON.stringify({ clusterMode: 'auto', maxNotes: 500, excludedFolders: [], showUnlinked: true, chartColor: "" }), JSON.stringify(plugin.settings));
     plugin.unload();
   }
 
@@ -231,7 +231,45 @@ try {
     check('home: black hole Home button on the full map opens Home', core.hidden === true && shown(dash), `core hidden while Home open: ${core.hidden}`);
     view.scope.handle('Escape'); await wait(100);
     check('home: closing Home shows the black hole button again', core.hidden === false);
+
+    // chart color picker
+    home.click(); await settle();
+    const palette = dash.querySelector('.sbbh-dash-palette');
+    const picker = dash.querySelector('.sbbh-picker');
+    const chartVar = () => dash.style.getPropertyValue('--sbbh-chart').trim();
+    const fillColor = () => getComputedStyle(dash.querySelector('.bar-list .fill')).backgroundColor;
+    check('color: quiet palette button in the dashboard header', !!palette && palette.getAttribute('aria-label') === 'Chart color' && Number(getComputedStyle(palette).opacity) < 1);
+    check('color: picker hidden until the palette is clicked', !shown(picker));
+    palette.click(); await wait(50);
+    check('color: picker has square, hue slider, hex box, 9 swatches + theme, Revert and Save', shown(picker) && !!picker.querySelector('.sbbh-picker-area') && !!picker.querySelector('.sbbh-picker-hue')
+      && !!picker.querySelector('.sbbh-picker-hex') && picker.querySelectorAll('.sbbh-picker-preset').length === 10 && picker.querySelector('.sbbh-picker-revert')?.textContent === 'Revert' && picker.querySelector('.sbbh-picker-save')?.textContent === 'Save changes');
+    picker.querySelector('.sbbh-picker-preset').click(); await wait(50);
+    check('color: a swatch previews live on the bars', chartVar() === '#8ba33f' && fillColor() === 'rgb(139, 163, 63)', `${chartVar()} / ${fillColor()}`);
+    picker.querySelector('.sbbh-picker-revert').click(); await wait(50);
+    check('color: Revert goes back to the saved color (theme accent)', chartVar() === 'var(--interactive-accent)' && env.plugin.settings.chartColor === '', chartVar());
+    const hex = picker.querySelector('.sbbh-picker-hex');
+    hex.value = '3a87b0'; hex.dispatchEvent(new Event('change')); await wait(50);
+    check('color: typing a hex code previews it', chartVar() === '#3a87b0', chartVar());
+    const area = picker.querySelector('.sbbh-picker-area');
+    area.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true})); await wait(50);
+    check('color: arrow keys on the square change the color', chartVar() !== '#3a87b0' && /^#[0-9a-f]{6}$/.test(chartVar()), chartVar());
+    const hue = picker.querySelector('.sbbh-picker-hue'); const beforeHue = chartVar();
+    hue.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', shiftKey: true, bubbles: true})); await wait(50);
+    check('color: arrow keys on the hue slider change the color', chartVar() !== beforeHue, `${beforeHue} -> ${chartVar()}`);
+    const escPicker = view.scope.handle('Escape'); await wait(50);
+    check('color: Escape closes the picker without saving, dashboard stays open', escPicker === false && !shown(picker) && shown(dash) && chartVar() === 'var(--interactive-accent)' && env.plugin.settings.chartColor === '');
+    palette.click(); await wait(50);
+    picker.querySelectorAll('.sbbh-picker-preset')[4].click(); picker.querySelector('.sbbh-picker-save').click(); await wait(100);
+    check('color: Save changes stores the color in settings and closes the picker', !shown(picker) && env.plugin.settings.chartColor === '#5599f2' && env.plugin.data.chartColor === '#5599f2' && chartVar() === '#5599f2');
+    view.scope.handle('Escape'); await wait(50);
     await close(view);
+    const reopened = await open(env); await wait(100);
+    check('color: saved color is used after reopening the map', reopened.contentEl.querySelector('.sbbh-dash').style.getPropertyValue('--sbbh-chart').trim() === '#5599f2');
+    const rp = reopened.contentEl.querySelector('.sbbh-dash-palette'); const rpk = reopened.contentEl.querySelector('.sbbh-picker');
+    reopened.contentEl.querySelector('.sbbh-toolbar button').click(); await settle();
+    rp.click(); await wait(50); rpk.querySelector('.sbbh-picker-theme').click(); rpk.querySelector('.sbbh-picker-save').click(); await wait(100);
+    check('color: the theme swatch saves "use theme accent"', env.plugin.settings.chartColor === '' && reopened.contentEl.querySelector('.sbbh-dash').style.getPropertyValue('--sbbh-chart').trim() === 'var(--interactive-accent)');
+    await close(reopened);
     env.plugin.unload();
   }
 

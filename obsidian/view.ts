@@ -55,7 +55,12 @@ export class BlackHoleView extends ItemView {
         if (node) this.openNote(node, null);
       },
       onClose: () => this.closeDashboard(),
-    }, (el, type, callback) => this.registerDomEvent(el, type, callback));
+      getColor: () => this.plugin.settings.chartColor || null,
+      saveColor: color => {
+        this.plugin.settings.chartColor = color ?? '';
+        void this.plugin.saveSettings();
+      },
+    }, (el, type, callback) => this.registerDomEvent(el, type as keyof HTMLElementEventMap, callback));
     this.register(() => this.closeMap());
     this.registerEvent(this.app.metadataCache.on('resolved', () => this.scheduleRefresh()));
     this.registerEvent(this.app.vault.on('create', () => this.scheduleRefresh()));
@@ -120,9 +125,11 @@ export class BlackHoleView extends ItemView {
   // Escape closes Home first, then leaves an open group.
   private updateEscape(): void {
     const wanted = !!this.dashboard?.isOpen || (this.map?.region ?? null) !== null;
+    // (the color picker lives inside the dashboard, so it is covered by isOpen)
     if (wanted && !this.escapeHandler) {
       this.escapeHandler = this.scope?.register([], 'Escape', () => {
-        if (this.dashboard?.isOpen) this.closeDashboard();
+        if (this.dashboard?.pickerOpen) this.dashboard.cancelPicker();
+        else if (this.dashboard?.isOpen) this.closeDashboard();
         else this.map?.focusRegion(null);
         return false;
       }) ?? null;
