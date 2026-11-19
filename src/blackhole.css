@@ -1,5 +1,7 @@
 /* The black-hole map's own styles. Everything is scoped under .sbbh (set by createBlackHole on its container). */
 .sbbh { --sbbh-text: #ededed; --sbbh-border: rgba(255, 255, 255, .09); --sbbh-accent-soft: rgba(255, 255, 255, .08); --sbbh-ring: rgba(255, 255, 255, .22); }
+/* the map's accessible label: read by screen readers, never shown */
+.sbbh .sbbh-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* base for the map's buttons, so host-page button styles don't leak in */
 .sbbh .sbbh-hub, .sbbh .sbbh-core { display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0; background: transparent; color: #ababab; border: 0; box-shadow: none; font: inherit; }
 .sbbh .sbbh-core:hover { color: #fff; }

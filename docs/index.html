@@ -300,6 +300,8 @@ h1#brand::before { display: none; }
 @media (prefers-reduced-motion: reduce) { #home-panel.intro * { animation: none !important; } }
 /* The black-hole map's own styles. Everything is scoped under .sbbh (set by createBlackHole on its container). */
 .sbbh { --sbbh-text: #ededed; --sbbh-border: rgba(255, 255, 255, .09); --sbbh-accent-soft: rgba(255, 255, 255, .08); --sbbh-ring: rgba(255, 255, 255, .22); }
+/* the map's accessible label: read by screen readers, never shown */
+.sbbh .sbbh-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* base for the map's buttons, so host-page button styles don't leak in */
 .sbbh .sbbh-hub, .sbbh .sbbh-core { display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0; background: transparent; color: #ababab; border: 0; box-shadow: none; font: inherit; }
 .sbbh .sbbh-core:hover { color: #fff; }
@@ -1228,6 +1230,8 @@ function createLensRenderer(clusters, scene, surface) {
 // graph = {nodes, edges, regions}; see README "Data format".
 
 // True when this browser can draw the black hole. Hosts can show a message instead.
+let labelCount = 0;
+
 function supportsWebGL2(doc) {
   const gl = doc.createElement('canvas').getContext('webgl2');
   gl?.getExtension('WEBGL_lose_context')?.loseContext();
@@ -1262,15 +1266,17 @@ function createBlackHole(container, graph, options = {}) {
   const hubLayer = make('div', 'sbbh-hubs');
   skyCanvas.setAttribute('aria-hidden', 'true');
   signalCanvas.setAttribute('aria-hidden', 'true');
+  // The label is hidden text, not aria-label: apps like Obsidian turn aria-label into a hover tooltip.
+  const labelEl = make('span', 'sbbh-sr', {id: `sbbh-label-${++labelCount}`, textContent: label});
   canvas.setAttribute('role', 'img');
-  canvas.setAttribute('aria-label', label);
+  canvas.setAttribute('aria-labelledby', labelEl.id);
   const core = onCoreClick ? make('button', 'sbbh-core', {type: 'button', title: 'Home'}) : null;
   if (core) {
     core.setAttribute('aria-label', 'Open Home');
     core.append(make('span', '', {textContent: 'Home'}));
     on(core, 'click', () => onCoreClick());
   }
-  const created = [skyCanvas, signalCanvas, canvas, hubLayer, ...(core ? [core] : [])];
+  const created = [labelEl, skyCanvas, signalCanvas, canvas, hubLayer, ...(core ? [core] : [])];
   container.append(...created);
   const ctx = canvas.getContext('2d');
   const signalCtx = signalCanvas.getContext('2d');
@@ -1435,6 +1441,7 @@ function createBlackHole(container, graph, options = {}) {
   }
 
   // ---- group labels ----
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
   function buildHubs() {
     hubs = clusters.map(cluster => {
       const button = make('button', 'sbbh-hub', {type: 'button'});
@@ -1443,7 +1450,7 @@ function createBlackHole(container, graph, options = {}) {
       const name = make('span', 'sbbh-hub-name', {textContent: cluster.name});
       const amount = ideas.filter(idea => nodes[idea.page].region === cluster.name).length;
       const count = make('span', 'sbbh-hub-count',
-        {textContent: amount ? `${amount} ideas` : `${nodes.filter(n => n.region === cluster.name).length} pages`});
+        {textContent: amount ? plural(amount, 'idea') : plural(nodes.filter(n => n.region === cluster.name).length, 'page')});
       button.append(dot, name, count);
       // plain listener: it goes away with the button when the labels are rebuilt
       button.addEventListener('click', () => {

@@ -5,6 +5,8 @@ import { createSkyRenderer, releaseSpaceSkyCanvas } from './sky.js';
 import { createLensRenderer, lensRadius, randomSource } from './lensing.js';
 
 // True when this browser can draw the black hole. Hosts can show a message instead.
+let labelCount = 0;
+
 export function supportsWebGL2(doc) {
   const gl = doc.createElement('canvas').getContext('webgl2');
   gl?.getExtension('WEBGL_lose_context')?.loseContext();
@@ -39,15 +41,17 @@ export function createBlackHole(container, graph, options = {}) {
   const hubLayer = make('div', 'sbbh-hubs');
   skyCanvas.setAttribute('aria-hidden', 'true');
   signalCanvas.setAttribute('aria-hidden', 'true');
+  // The label is hidden text, not aria-label: apps like Obsidian turn aria-label into a hover tooltip.
+  const labelEl = make('span', 'sbbh-sr', {id: `sbbh-label-${++labelCount}`, textContent: label});
   canvas.setAttribute('role', 'img');
-  canvas.setAttribute('aria-label', label);
+  canvas.setAttribute('aria-labelledby', labelEl.id);
   const core = onCoreClick ? make('button', 'sbbh-core', {type: 'button', title: 'Home'}) : null;
   if (core) {
     core.setAttribute('aria-label', 'Open Home');
     core.append(make('span', '', {textContent: 'Home'}));
     on(core, 'click', () => onCoreClick());
   }
-  const created = [skyCanvas, signalCanvas, canvas, hubLayer, ...(core ? [core] : [])];
+  const created = [labelEl, skyCanvas, signalCanvas, canvas, hubLayer, ...(core ? [core] : [])];
   container.append(...created);
   const ctx = canvas.getContext('2d');
   const signalCtx = signalCanvas.getContext('2d');
@@ -212,6 +216,7 @@ export function createBlackHole(container, graph, options = {}) {
   }
 
   // ---- group labels ----
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
   function buildHubs() {
     hubs = clusters.map(cluster => {
       const button = make('button', 'sbbh-hub', {type: 'button'});
@@ -220,7 +225,7 @@ export function createBlackHole(container, graph, options = {}) {
       const name = make('span', 'sbbh-hub-name', {textContent: cluster.name});
       const amount = ideas.filter(idea => nodes[idea.page].region === cluster.name).length;
       const count = make('span', 'sbbh-hub-count',
-        {textContent: amount ? `${amount} ideas` : `${nodes.filter(n => n.region === cluster.name).length} pages`});
+        {textContent: amount ? plural(amount, 'idea') : plural(nodes.filter(n => n.region === cluster.name).length, 'page')});
       button.append(dot, name, count);
       // plain listener: it goes away with the button when the labels are rebuilt
       button.addEventListener('click', () => {
