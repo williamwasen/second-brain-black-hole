@@ -74,3 +74,78 @@
   width: var(--icon-s);
   height: var(--icon-s);
 }
+
+/* Home dashboard over the map (drawn by src/dashboard.js) */
+.sbbh-view .sbbh-dash {
+  position: absolute;
+  z-index: 1001;
+  top: calc(var(--size-4-3) * 2 + 32px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(980px, calc(100% - 2 * var(--size-4-4)));
+  max-height: calc(100% - 2 * var(--size-4-3) - 48px);
+  overflow: auto;
+  padding: var(--size-4-5);
+  border: var(--border-width) solid var(--background-modifier-border);
+  border-radius: var(--radius-l);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  box-shadow: var(--shadow-l);
+}
+.sbbh-view .sbbh-dash-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--size-4-4); }
+.sbbh-view .sbbh-dash-top h2 { margin: 0; font-size: var(--font-ui-larger); }
+.sbbh-view .sbbh-dash-date {
+  margin-left: var(--size-4-2); padding: 2px 8px; border-radius: var(--radius-s);
+  background: var(--background-secondary); color: var(--text-muted); font-size: var(--font-ui-smaller); font-weight: normal; vertical-align: middle;
+}
+.sbbh-view .sbbh-dash-close { width: 30px; height: 30px; padding: 0; font-size: 18px; line-height: 1; }
+.sbbh-view .sbbh-dash .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--size-4-3); }
+.sbbh-view .sbbh-dash .kpi {
+  position: relative; overflow: hidden; padding: var(--size-4-3) var(--size-4-4);
+  border: var(--border-width) solid var(--background-modifier-border); border-left: 3px solid var(--interactive-accent);
+  border-radius: var(--radius-m); background: var(--background-secondary);
+}
+.sbbh-view .sbbh-dash .kpi b { display: block; font-size: 26px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.sbbh-view .sbbh-dash .kpi span { display: block; margin-top: 4px; font-size: var(--font-ui-small); }
+.sbbh-view .sbbh-dash .kpi small { display: block; color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.sbbh-view .sbbh-dash .kpi .chip {
+  position: absolute; top: var(--size-4-3); right: var(--size-4-3); padding: 1px 6px; border-radius: var(--radius-s);
+  background: var(--background-modifier-hover); color: var(--text-muted); font-size: var(--font-ui-smaller); font-style: normal;
+}
+.sbbh-view .sbbh-dash .kpi .spark { display: flex; align-items: flex-end; gap: 3px; height: 30px; margin-top: var(--size-4-2); }
+.sbbh-view .sbbh-dash .kpi .spark i { flex: 1; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--interactive-accent); }
+.sbbh-view .sbbh-dash .dash-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: var(--size-4-3); margin-top: var(--size-4-3); }
+.sbbh-view .sbbh-dash .chart-card {
+  min-width: 0; padding: var(--size-4-3) var(--size-4-3) var(--size-4-2);
+  border: var(--border-width) solid var(--background-modifier-border); border-radius: var(--radius-m); background: var(--background-secondary);
+}
+.sbbh-view .sbbh-dash .chart-card h3 { margin: 0; font-size: var(--font-ui-medium); }
+.sbbh-view .sbbh-dash .chart-card .sub { margin: 2px 0 var(--size-4-3); color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.sbbh-view .sbbh-dash .chart svg { display: block; width: 100%; height: 210px; overflow: visible; }
+.sbbh-view .sbbh-dash .chart .bar { fill: var(--interactive-accent); }
+.sbbh-view .sbbh-dash .chart .hit:hover + .bar { fill: var(--interactive-accent-hover); }
+.sbbh-view .sbbh-dash .chart .grid { stroke: var(--background-modifier-border); stroke-width: 1; }
+.sbbh-view .sbbh-dash .chart text { fill: var(--text-muted); font-size: 10px; }
+.sbbh-view .sbbh-dash .bar-list { display: flex; flex-direction: column; gap: 2px; }
+.sbbh-view .sbbh-dash .bar-list button {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; width: 100%; height: auto;
+  padding: 6px 8px; border: 0; border-radius: var(--radius-s); background: transparent; box-shadow: none;
+  color: var(--text-normal); font-size: var(--font-ui-small); text-align: left; cursor: pointer;
+}
+.sbbh-view .sbbh-dash .bar-list button:hover { background: var(--background-modifier-hover); }
+.sbbh-view .sbbh-dash .bar-list button:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 1px; }
+.sbbh-view .sbbh-dash .bar-list .name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.sbbh-view .sbbh-dash .bar-list .value { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.sbbh-view .sbbh-dash .bar-list .track { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--background-modifier-hover); overflow: hidden; }
+.sbbh-view .sbbh-dash .bar-list .fill { display: block; height: 100%; border-radius: 3px; background: var(--interactive-accent); }
+.sbbh-view .sbbh-dash-tip {
+  position: absolute; z-index: 5; padding: 6px 10px; border-radius: var(--radius-s); pointer-events: none; white-space: nowrap;
+  background: var(--background-primary-alt); border: var(--border-width) solid var(--background-modifier-border);
+  color: var(--text-normal); font-size: var(--font-ui-smaller); box-shadow: var(--shadow-s);
+}
+.sbbh-view .sbbh-dash-tip small { display: block; color: var(--text-muted); }
+.sbbh-view .sbbh-dash-tip[hidden] { display: none; }
+@media (max-width: 900px) {
+  .sbbh-view .sbbh-dash .kpis { grid-template-columns: repeat(2, 1fr); }
+  .sbbh-view .sbbh-dash .dash-grid { grid-template-columns: 1fr; }
+}

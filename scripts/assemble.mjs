@@ -24,7 +24,7 @@ export function assemble(graph) {
 // shortcut: joins src/ modules into one classic script by dropping their import/export lines instead of
 // bundling, so the importer needs no build tools. Works while modules only use `import {..} from './x.js'`
 // and `export function/const`; switch to a bundler if that changes.
-const MODULES = ['sky.js', 'accretion.js', 'lensing.js', 'blackhole.js', 'app.mjs'];
+const MODULES = ['sky.js', 'accretion.js', 'lensing.js', 'blackhole.js', 'dashboard.js', 'app.mjs'];
 function inlineModules() {
   const body = MODULES.map(file => read(file)
     .replace(/^import .*;\n/gm, '')

@@ -1,5 +1,6 @@
 import { debounce, ItemView, Keymap, Scope, setIcon, WorkspaceLeaf, type KeymapEventHandler } from 'obsidian';
-import { createBlackHole, supportsWebGL2, type BlackHole, type MapNode } from '../src/blackhole.js';
+import { createBlackHole, supportsWebGL2, type BlackHole, type MapGraph, type MapNode } from '../src/blackhole.js';
+import { DashboardPanel } from './dashboard-panel';
 import type BlackHolePlugin from './main';
 import { buildVaultGraph } from './vault-graph';
 
@@ -13,7 +14,9 @@ export class BlackHoleView extends ItemView {
   private message: HTMLElement | null = null;
   private toolbar: HTMLElement | null = null;
   private backButton: HTMLButtonElement | null = null;
-  // Escape is only claimed while a group is open, so Obsidian's own Escape works everywhere else.
+  private dashboard: DashboardPanel | null = null;
+  private graph: MapGraph | null = null;
+  // Escape is only claimed while Home or a group is open, so Obsidian's own Escape works everywhere else.
   private escapeHandler: KeymapEventHandler | null = null;
   // Many vault events arrive in bursts (sync, bulk renames): rebuild once things settle.
   readonly scheduleRefresh = debounce(() => this.refresh(), 500, true);
@@ -44,6 +47,15 @@ export class BlackHoleView extends ItemView {
     }
     this.host = this.contentEl.createDiv({cls: 'sbbh-host'});
     this.buildToolbar(this.host);
+    this.dashboard = new DashboardPanel(this.host, {
+      onGroup: name => { this.closeDashboard(); this.map?.focusRegion(name); },
+      onNote: index => {
+        const node = this.graph?.nodes[index];
+        this.closeDashboard();
+        if (node) this.openNote(node, null);
+      },
+      onClose: () => this.closeDashboard(),
+    }, (el, type, callback) => this.registerDomEvent(el, type, callback));
     this.register(() => this.closeMap());
     this.registerEvent(this.app.metadataCache.on('resolved', () => this.scheduleRefresh()));
     this.registerEvent(this.app.vault.on('create', () => this.scheduleRefresh()));
@@ -61,6 +73,7 @@ export class BlackHoleView extends ItemView {
 
   onResize(): void {
     this.map?.resize();
+    if (this.graph) this.dashboard?.update(this.graph);
   }
 
   resetCamera(): void {
@@ -76,19 +89,44 @@ export class BlackHoleView extends ItemView {
     home.createSpan({text: 'Home'});
     this.backButton = this.toolbar.createEl('button', {cls: 'sbbh-toolbar-button', text: '← All groups', attr: {type: 'button', 'aria-label': 'Leave this group and show all groups'}});
     this.backButton.hide();
-    this.registerDomEvent(home, 'click', () => this.map?.resetCamera());
+    this.registerDomEvent(home, 'click', () => this.toggleDashboard());
     this.registerDomEvent(this.backButton, 'click', () => this.map?.focusRegion(null));
   }
 
   private onRegionChange(name: string | null): void {
     if (name === null) this.backButton?.hide();
     else this.backButton?.show();
-    if (name !== null && !this.escapeHandler) {
+    this.updateEscape();
+  }
+
+  // Home: fly back to the full map and show the dashboard over it, like the web version.
+  private toggleDashboard(): void {
+    if (this.dashboard?.isOpen) { this.closeDashboard(); return; }
+    if (!this.map || !this.graph) return;
+    this.map.focusRegion(null);
+    this.map.flyHome();
+    this.map.setOverlayOpen(true);
+    this.dashboard?.open(this.graph);
+    this.updateEscape();
+  }
+
+  private closeDashboard(): void {
+    if (!this.dashboard?.isOpen) return;
+    this.dashboard.close();
+    this.map?.setOverlayOpen(false);
+    this.updateEscape();
+  }
+
+  // Escape closes Home first, then leaves an open group.
+  private updateEscape(): void {
+    const wanted = !!this.dashboard?.isOpen || (this.map?.region ?? null) !== null;
+    if (wanted && !this.escapeHandler) {
       this.escapeHandler = this.scope?.register([], 'Escape', () => {
-        this.map?.focusRegion(null);
+        if (this.dashboard?.isOpen) this.closeDashboard();
+        else this.map?.focusRegion(null);
         return false;
       }) ?? null;
-    } else if (name === null && this.escapeHandler) {
+    } else if (!wanted && this.escapeHandler) {
       this.scope?.unregister(this.escapeHandler);
       this.escapeHandler = null;
     }
@@ -106,8 +144,10 @@ export class BlackHoleView extends ItemView {
     }
     this.message?.remove();
     this.message = null;
+    this.graph = graph;
     if (this.map) {
       this.map.update(graph);
+      this.dashboard?.update(graph);
       return;
     }
     this.map = createBlackHole(this.host, graph, {
@@ -116,7 +156,7 @@ export class BlackHoleView extends ItemView {
       onSelect: (node, {event}) => this.openNote(node, event),
       onRegionChange: name => this.onRegionChange(name),
       // The black hole itself is a Home button too, as in the web version.
-      onCoreClick: () => this.map?.resetCamera(),
+      onCoreClick: () => this.toggleDashboard(),
     });
     this.toolbar?.show();
   }
@@ -135,6 +175,7 @@ export class BlackHoleView extends ItemView {
   }
 
   private closeMap(): void {
+    this.dashboard?.close();
     this.map?.destroy();
     this.map = null;
     this.toolbar?.hide();

@@ -76,6 +76,7 @@ proto.show ??= function () { this.style.display = ''; };
 proto.empty ??= function () { this.replaceChildren(); };
 proto.addClass ??= function (cls) { this.classList.add(cls); };
 Object.defineProperty(proto, 'doc', { configurable: true, get() { return this.ownerDocument; } });
+Object.defineProperty(proto, 'win', { configurable: true, get() { return this.ownerDocument.defaultView; } });
 
 export class Component {
   _cleanups = [];

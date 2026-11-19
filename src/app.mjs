@@ -1,6 +1,7 @@
 // The standalone page around the map: header, toolbar, Pages panel (search + reading), Home dashboard.
 // assemble.mjs inlines this with the core modules into one HTML file.
 import { createBlackHole } from './blackhole.js';
+import { hideDashboardTip, renderHomeDashboard } from './dashboard.js';
 
 const {nodes, edges, regions} = JSON.parse(document.getElementById('data').textContent);
 const get = id => document.getElementById(id);
@@ -131,130 +132,16 @@ function homePageButton(index, subtitle, query = '') {
   }
   button.addEventListener('click',()=>{get('home-panel').hidden=true;selectPage(index);});return button;
 }
-// Home dashboard: quick numbers and three small charts built from the wiki itself.
-const dayMs = 864e5;
-const dayKey = t => { const d = new Date(t); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
-const touched = node => { const t = Date.parse(node.updated); return Number.isFinite(t) ? t + 12 * 3600e3 : node.modified; };
-function chartTip(event, title, detail) {
-  const tip = get('chart-tip'), panel = get('home-panel').getBoundingClientRect();
-  tip.replaceChildren(document.createTextNode(title), Object.assign(document.createElement('small'), {textContent: detail}));
-  tip.hidden = false;
-  const x = Math.min(event.clientX - panel.left + 12, panel.width - tip.offsetWidth - 8);
-  tip.style.left = x + 'px';
-  tip.style.top = (event.clientY - panel.top + get('home-panel').scrollTop - tip.offsetHeight - 10) + 'px';
-}
-function hideTip() { get('chart-tip').hidden = true; }
-// Numbers roll up from zero when Home opens.
-function countUp(element, value, duration = 900) {
-  const start = performance.now();
-  const step = now => {
-    const t = Math.min(1, (now - start) / duration), eased = 1 - (1 - t) ** 3;
-    element.textContent = Math.round(value * eased).toLocaleString();
-    if (t < 1 && element.isConnected) requestAnimationFrame(step);
-  };
-  element.textContent = '0';
-  requestAnimationFrame(step);
-}
+// Home dashboard: drawn by src/dashboard.js into this page's elements.
+const dashboard = {panel: get('home-panel'), date: get('home-date'), kpis: get('home-kpis'), activity: get('chart-activity'),
+  groups: get('chart-groups'), connected: get('chart-connected'), tip: get('chart-tip')};
+const hideTip = () => hideDashboardTip(dashboard);
 function renderDashboard() {
-  const now = Date.now();
-  const weekAgo = now - 7 * dayMs;
-  const fresh = nodes.filter(n => touched(n) >= weekAgo).length;
-  get('home-date').textContent = new Date(now).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'});
-  const byGroup = clusters.map(c => c.name);
-  const perGroup = fn => byGroup.map(name => fn(name)).sort((a, b) => a - b);
-  // Each tile: big number, label, detail, a quiet chip, and mini bars (lighter to stronger) from real counts.
-  const kpi = (value, label, detail, chip, bars, color, barsLabel) => {
-    const tile = Object.assign(document.createElement('div'), {className: 'kpi'});
-    tile.style.setProperty('--kpi', color);
-    const spark = Object.assign(document.createElement('div'), {className: 'spark', title: barsLabel});
-    const top = Math.max(1, ...bars);
-    bars.forEach((v, k) => { const bar = document.createElement('i'); bar.style.height = Math.max(6, 100 * v / top) + '%'; bar.style.opacity = (.55 + .45 * k / Math.max(1, bars.length - 1)).toFixed(2); bar.style.setProperty('--j', k); spark.append(bar); });
-    const number = Object.assign(document.createElement('b'), {textContent: value.toLocaleString()});
-    if (get('home-panel').classList.contains('intro') && !reducedMotion.matches) countUp(number, value);
-    tile.append(number,
-      Object.assign(document.createElement('span'), {textContent: label}),
-      Object.assign(document.createElement('small'), {textContent: detail}),
-      Object.assign(document.createElement('em'), {className: 'chip', textContent: chip}), spark);
-    tile.style.setProperty('--i', kpiCount++);
-    return tile;
-  };
-  let kpiCount = 0;
-  const lastWeek = Array.from({length: 7}, (_, i) => now - (6 - i) * dayMs).map(t => nodes.filter(n => dayKey(touched(n)) === dayKey(t)).length);
-  const added = nodes.filter(n => { const t = Date.parse(n.created); return Number.isFinite(t) && t >= weekAgo; }).length;
-  get('home-kpis').replaceChildren(
-    kpi(nodes.length, 'Pages', `in ${clusters.length} groups`, added ? `+${added} new` : `${clusters.length} groups`,
-      perGroup(name => nodes.filter(n => n.region === name).length), 'var(--c-pages)', 'Pages per group'),
-    kpi(ideas.length, 'Ideas', 'sections across all pages', `${(ideas.length / Math.max(1, nodes.length)).toFixed(1)} / page`,
-      perGroup(name => ideas.filter(idea => nodes[idea.page].region === name).length), 'var(--c-ideas)', 'Ideas per group'),
-    kpi(edges.length, 'Links', 'between pages', `${(2 * edges.length / Math.max(1, nodes.length)).toFixed(1)} / page`,
-      perGroup(name => edges.filter(([a, b]) => nodes[a].region === name || nodes[b].region === name).length), 'var(--c-links)', 'Links touching each group'),
-    kpi(fresh, 'Updated this week', 'pages changed in 7 days', `${Math.round(100 * fresh / Math.max(1, nodes.length))}%`,
-      lastWeek, 'var(--c-updates)', 'Pages updated per day, last 7 days'));
-
-  // Pages updated per day, last 30 days: one series, columns anchored to the baseline.
-  const days = Array.from({length: 30}, (_, i) => now - (29 - i) * dayMs);
-  const counts = days.map(t => nodes.filter(n => dayKey(touched(n)) === dayKey(t)).length);
-  const box = get('chart-activity');
-  const width = Math.max(240, box.clientWidth), height = 210, left = 22, bottom = 18, top = 6;
-  const max = Math.max(2, ...counts), step = Math.ceil(max / 2);
-  const ceiling = step * 2, plotW = width - left, plotH = height - bottom - top;
-  const gap = 2, barW = (plotW - gap * 29) / 30;
-  const svgNS = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(svgNS, 'svg');
-  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-  svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', `Pages updated per day over the last 30 days; ${counts.reduce((a, b) => a + b, 0)} updates in total, most in one day ${max}.`);
-  const el = (name, attrs, text, parent = svg) => { const e = document.createElementNS(svgNS, name); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text != null) e.textContent = text; parent.append(e); return e; };
-  const defs = el('defs', {});
-  for (const [id, from, to] of [['bar-fill', '#c58dff', '#9a45ff'], ['bar-hover', '#dcb8ff', '#b06cff']]) {
-    const g = el('linearGradient', {id, x1: 0, y1: 0, x2: 0, y2: 1}, null, defs);
-    el('stop', {offset: '0', 'stop-color': from}, null, g);
-    el('stop', {offset: '1', 'stop-color': to}, null, g);
-  }
-  for (const tick of [0, step, ceiling]) {
-    const y = top + plotH - plotH * tick / ceiling;
-    el('line', {class: 'grid', x1: left, x2: width, y1: y, y2: y});
-    el('text', {x: 0, y: y + 3}, tick);
-  }
-  const fmt = t => new Date(t).toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
-  [[0, 'start'], [15, 'middle'], [29, 'end']].forEach(([i, anchor]) =>
-    el('text', {x: left + i * (barW + gap) + (anchor === 'start' ? 0 : anchor === 'end' ? barW : barW / 2), y: height - 4, 'text-anchor': anchor}, fmt(days[i])));
-  counts.forEach((count, i) => {
-    const x = left + i * (barW + gap);
-    const hit = el('rect', {class: 'hit', x, y: top, width: barW + gap, height: plotH, fill: 'transparent'});
-    if (count) {
-      const h = Math.max(3, plotH * count / ceiling), y = top + plotH - h, r = Math.min(4, barW / 2, h);
-      el('path', {class: 'bar', style: `--j:${i}`, d: `M${x},${top + plotH}V${y + r}Q${x},${y} ${x + r},${y}H${x + barW - r}Q${x + barW},${y} ${x + barW},${y + r}V${top + plotH}Z`});
-    }
-    hit.addEventListener('pointermove', event => chartTip(event, `${count} ${count === 1 ? 'page' : 'pages'}`, fmt(days[i])));
-    hit.addEventListener('pointerleave', hideTip);
+  renderHomeDashboard(dashboard, {nodes, edges, regions}, {
+    countUp: get('home-panel').classList.contains('intro') && !reducedMotion.matches,
+    onGroup: name => { get('home-panel').hidden = true; focusRegion(name); },
+    onNote: i => { get('home-panel').hidden = true; selectPage(i); },
   });
-  box.replaceChildren(svg);
-
-  // Ideas by group and most connected pages: one series each, labelled bars.
-  const barRow = (name, value, maxValue, detail, onClick) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    const track = Object.assign(document.createElement('span'), {className: 'track'});
-    track.append(Object.assign(document.createElement('span'), {className: 'fill', style: `width:${Math.max(2, 100 * value / maxValue)}%`}));
-    button.append(Object.assign(document.createElement('span'), {className: 'name', textContent: name}),
-      Object.assign(document.createElement('span'), {className: 'value', textContent: value}), track);
-    button.setAttribute('aria-label', `${name}: ${detail}`);
-    button.addEventListener('pointermove', event => chartTip(event, name, detail));
-    button.addEventListener('pointerleave', hideTip);
-    button.addEventListener('click', () => { hideTip(); onClick(); });
-    return button;
-  };
-  const groups = clusters.map(c => ({name: c.name, ideas: ideas.filter(idea => nodes[idea.page].region === c.name).length,
-    pages: nodes.filter(n => n.region === c.name).length})).sort((a, b) => b.ideas - a.ideas);
-  const topIdeas = Math.max(1, ...groups.map(g => g.ideas));
-  get('chart-groups').replaceChildren(...groups.map(g => barRow(g.name, g.ideas, topIdeas, `${g.ideas} ideas in ${g.pages} pages`,
-    () => { get('home-panel').hidden = true; focusRegion(g.name); })));
-  const connected = nodes.map((n, i) => i).sort((a, b) => nodes[b].degree - nodes[a].degree).slice(0, 6);
-  const topDegree = Math.max(1, nodes[connected[0]]?.degree || 1);
-  get('chart-connected').replaceChildren(...connected.map(i => barRow(nodes[i].title, nodes[i].degree, topDegree,
-    `${nodes[i].degree} linked pages · ${nodes[i].region}`, () => { get('home-panel').hidden = true; selectPage(i); })));
-  for (const list of ['chart-groups', 'chart-connected']) get(list).querySelectorAll('.fill').forEach((fill, j) => fill.style.setProperty('--j', j));
 }
 
 function renderHome() {

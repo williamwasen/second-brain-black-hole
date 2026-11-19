@@ -32,6 +32,7 @@ Or open its page in the [Obsidian community directory](https://community.obsidia
 - Drag to rotate, scroll to zoom. Point at a star to see its note's name.
 - Select a star to open the note. Ctrl-click (Cmd-click on Mac) opens it in a new tab.
 - Select a group's name to fly to that group.
+- Select **Home** (top left) or the black hole for a dashboard: note, idea and link counts, notes updated per day, ideas by group and your most connected notes. Select a group or note there to jump to it. **← All groups** or Esc leaves a group; Esc also closes Home.
 - The map updates by itself when you add, rename, link or delete notes, so there's nothing to schedule or rebuild.
 
 ### Settings
